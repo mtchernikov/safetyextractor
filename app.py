@@ -177,7 +177,7 @@ if not api_key:
 
 with st.sidebar:
     st.header("Settings")
-    model = st.text_input("Model", value="gpt-5.5")
+    model = st.text_input("Model", value="gpt-5.4")
     use_optimizer = st.checkbox("Use DSPy BootstrapFewShot optimizer", value=False, help="Costs extra LLM calls on first run. Leave off for a quick comparison.")
     st.caption("For Streamlit Cloud, set OPENAI_API_KEY in app secrets.")
 
