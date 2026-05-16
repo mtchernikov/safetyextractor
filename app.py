@@ -194,6 +194,14 @@ def fallback_normalize(description: str, ontology: Dict[str, Any]) -> Dict[str, 
         ent("oxygen", "oxygen", "oxidizer")
     if "valve" in text or "relay" in text:
         ent("electronic valve module", "electrical_actuator", "component")
+    if "220" in text or "230" in text or "mains" in text:
+        ent("220 V mains", "power_supply_220v", "energy_source")
+    if "power supply" in text or "psu" in text:
+        ent("power supply unit", "power_supply_unit", "component")
+    if "metal housing" in text or "conductive housing" in text:
+        ent("user-accessible metal housing", "user_accessible_metal_housing", "component")
+    if "clean" in text or "disinfectant" in text or "moisture" in text or "liquid" in text:
+        ent("liquid disinfectant", "moisture", "environmental_condition")
     concepts = {e["canonical"] for e in entities}
     if "medical_ventilator" in concepts and "airway_pressure" in concepts:
         triples.append({"subject": "medical_ventilator", "relation": "controls", "object": "airway_pressure", "relation_group": "control", "source": "explicit", "line_id": 1, "confidence": 0.8, "evidence": "ventilator applies pressure"})
@@ -209,7 +217,16 @@ def fallback_normalize(description: str, ontology: Dict[str, Any]) -> Dict[str, 
         triples.append({"subject": "oxygen", "relation": "flows_through", "object": "plastic_tube", "relation_group": "medium_flow", "source": "inferred", "line_id": 1, "confidence": 0.6, "evidence": "oxygen context and plastic tube"})
     if "electrical_actuator" in concepts and "plastic_tube" in concepts:
         triples.append({"subject": "electrical_actuator", "relation": "near", "object": "plastic_tube", "relation_group": "structural", "source": "inferred", "line_id": 1, "confidence": 0.5, "evidence": "electronic valve module near tube"})
-    return {"entities": entities, "triples": triples, "unknowns": ["patient group", "pressure limits", "tube material grade", "single-use or reusable tube", "patient-side filter", "oxygen concentration if oxygen is used"]}
+    if "power_supply_220v" in concepts:
+        triples.append({"subject": "device", "relation": "has_component", "object": "power_supply_220v", "relation_group": "structural", "source": "explicit", "line_id": 1, "confidence": 0.8, "evidence": "220 V mains power supply"})
+    if "power_supply_unit" in concepts and "power_supply_220v" in concepts:
+        triples.append({"subject": "power_supply_unit", "relation": "connected_to", "object": "power_supply_220v", "relation_group": "electrical", "source": "explicit", "line_id": 1, "confidence": 0.75, "evidence": "power supply converts mains"})
+        triples.append({"subject": "power_supply_unit", "relation": "converts", "object": "mains_voltage_to_low_voltage", "relation_group": "functional", "source": "explicit", "line_id": 1, "confidence": 0.75, "evidence": "converts mains to low voltage"})
+    if "user_accessible_metal_housing" in concepts:
+        triples.append({"subject": "user_accessible_metal_housing", "relation": "user_accessible", "object": "user", "relation_group": "human_interaction", "source": "explicit", "line_id": 1, "confidence": 0.8, "evidence": "user-accessible metal housing"})
+    if "moisture" in concepts and "power_supply_220v" in concepts:
+        triples.append({"subject": "power_supply_220v", "relation": "exposed_to", "object": "moisture", "relation_group": "exposure", "source": "inferred", "line_id": 1, "confidence": 0.45, "evidence": "housing may be cleaned with liquid disinfectant; exposure path must be checked"})
+    return {"entities": entities, "triples": triples, "unknowns": ["patient group", "pressure limits", "tube material grade", "single-use or reusable tube", "patient-side filter", "oxygen concentration if oxygen is used", "protective earth or reinforced insulation", "creepage and clearance", "IP rating and cleaning method"]}
 
 
 def build_graph(normalized: Dict[str, Any], ontology: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -383,6 +400,107 @@ Return JSON:
     return rows
 
 
+
+# ============================================================
+# Potentially applicable norms / standards resolution
+# ============================================================
+
+def confidence_to_score(value: str) -> float:
+    value = str(value or "medium").lower()
+    if value == "high":
+        return 0.85
+    if value == "low":
+        return 0.35
+    return 0.60
+
+
+def score_to_label(score: float) -> str:
+    if score >= 0.75:
+        return "high"
+    if score >= 0.45:
+        return "medium"
+    return "low"
+
+
+def relation_level_factor(level: str) -> float:
+    level = str(level or "conditional").lower()
+    if level == "primary":
+        return 1.0
+    if level == "conditional":
+        return 0.78
+    if level == "supporting_evidence":
+        return 0.62
+    if level == "related_but_insufficient":
+        return 0.45
+    return 0.55
+
+
+def normalize_confidence_value(value: Any) -> float:
+    if isinstance(value, (int, float)):
+        return max(0.0, min(1.0, float(value)))
+    return confidence_to_score(str(value))
+
+
+def resolve_potential_norms(hazard_rows: List[Dict[str, Any]], standards_catalogue: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Resolve potentially applicable norms deterministically from hazard IDs.
+
+    The LLM is not allowed to invent standards. This function only uses
+    standards_catalogue.yaml and the hazard IDs found by deterministic/LLM hazard analysis.
+    """
+    if not hazard_rows:
+        return []
+
+    hazard_by_id = {}
+    for row in hazard_rows:
+        hid = row.get("hazard_id")
+        if not hid:
+            continue
+        hazard_by_id.setdefault(hid, row)
+
+    norm_rows = []
+    for entry_id, entry in standards_catalogue.get("entries", {}).items():
+        addressed = entry.get("addresses_hazards", []) or []
+        matched_links = []
+        for link in addressed:
+            hazard_id = link.get("hazard_id")
+            if hazard_id in hazard_by_id:
+                hazard_row = hazard_by_id[hazard_id]
+                relation_level = link.get("relation_level", entry.get("default_relation_level", "conditional"))
+                base_conf = normalize_confidence_value(link.get("confidence", entry.get("base_confidence", "medium")))
+                hazard_conf = confidence_to_score(hazard_row.get("confidence"))
+                combined_score = base_conf * hazard_conf * relation_level_factor(relation_level)
+                matched_links.append({
+                    "hazard_id": hazard_id,
+                    "hazard_title": hazard_row.get("hazard", hazard_id),
+                    "relation_level": relation_level,
+                    "combined_score": combined_score,
+                    "rationale": link.get("rationale", entry.get("rationale", "")),
+                    "source": hazard_row.get("source", "unknown"),
+                })
+
+        if not matched_links:
+            continue
+
+        # Keep strongest link for the displayed relation level/confidence.
+        strongest = sorted(matched_links, key=lambda x: x["combined_score"], reverse=True)[0]
+        hazards_addressed = "; ".join(sorted({m["hazard_title"] for m in matched_links}))
+        relation_levels = "; ".join(sorted({m["relation_level"] for m in matched_links}))
+        evidence_sources = "; ".join(sorted({m["source"] for m in matched_links}))
+        rationale = " | ".join([m["rationale"] for m in matched_links if m.get("rationale")])
+
+        norm_rows.append({
+            "Norm / regulation": entry.get("display_name", entry_id),
+            "Hazards addressed": hazards_addressed,
+            "Level of relation": relation_levels,
+            "Confidence": score_to_label(strongest["combined_score"]),
+            "Confidence score": round(strongest["combined_score"], 2),
+            "Rationale": rationale,
+            "Evidence source": evidence_sources,
+        })
+
+    norm_rows.sort(key=lambda r: r["Confidence score"], reverse=True)
+    return norm_rows
+
 def graph_to_dot(graph: List[Dict[str, Any]]) -> str:
     def node_id(x: str) -> str:
         return "n_" + normalize_id(x)
@@ -422,17 +540,23 @@ with st.sidebar:
     relations_upload = st.file_uploader("relations.yaml", type=["yaml", "yml"])
     propagation_upload = st.file_uploader("propagation_rules.yaml", type=["yaml", "yml"])
     hazard_upload = st.file_uploader("hazard_templates.yaml", type=["yaml", "yml"])
+    standards_upload = st.file_uploader("standards_catalogue.yaml", type=["yaml", "yml"])
     use_fallback_if_no_key = st.checkbox("Use fallback extractor if no API key", value=True)
 
 ontology = load_yaml_from_upload_or_default(ontology_upload, "data/ontology.yaml")
 relations = load_yaml_from_upload_or_default(relations_upload, "data/relations.yaml")
 propagation_rules = load_yaml_from_upload_or_default(propagation_upload, "data/propagation_rules.yaml")
 hazard_templates = load_yaml_from_upload_or_default(hazard_upload, "data/hazard_templates.yaml")
+standards_catalogue = load_yaml_from_upload_or_default(standards_upload, "data/standards_catalogue.yaml")
 
 default_description = """The product is a lung ventilator.
 The ventilator applies pressure to the patient's lung via a plastic tube.
 The oxygen concentration can be adjusted.
-The plastic tube passes near an electronic valve module."""
+The plastic tube passes near an electronic valve module.
+The device is powered from a 220 V mains power supply.
+The power supply unit converts mains to 24 V DC.
+The device has a user-accessible metal housing.
+The housing may be cleaned with liquid disinfectant."""
 st.subheader("1. System description")
 description = st.text_area("Input or edit the system description. Press Proceed when ready.", value=default_description, height=170)
 proceed = st.button("Proceed", type="primary")
@@ -476,6 +600,15 @@ if proceed:
         result_df = result_df[["Hazard", "LLM or Deterministic", "Rationale why this hazard is possible", "Confidence level", "Missing information"]]
         st.dataframe(result_df, use_container_width=True, hide_index=True)
         st.download_button("Download hazard table as CSV", data=result_df.to_csv(index=False).encode("utf-8"), file_name="safety_copilot_hazard_table.csv", mime="text/csv")
+
+        st.subheader("5. Potentially applicable norms / standards")
+        norm_rows = resolve_potential_norms(all_rows, standards_catalogue)
+        if norm_rows:
+            norm_df = pd.DataFrame(norm_rows)
+            st.dataframe(norm_df, use_container_width=True, hide_index=True)
+            st.download_button("Download norms table as CSV", data=norm_df.to_csv(index=False).encode("utf-8"), file_name="safety_copilot_norms_table.csv", mime="text/csv")
+        else:
+            st.info("No potentially applicable norms were resolved from the standards catalogue.")
     else:
         st.info("No hazards or potential pathways were found.")
 else:
