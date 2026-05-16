@@ -1,0 +1,54 @@
+meta:
+  version: "0.1"
+  name: "Ventilator PoC hazard templates"
+templates:
+  - id: "HT_VENT_PRESSURE_LUNG_INJURY"
+    title: "Ventilator pressure profile may injure lungs"
+    category: "medical_therapy_control"
+    priority_default: "high"
+    confidence_default: "high"
+    trigger:
+      all_of:
+        - concepts_any: ["medical_ventilator"]
+        - concepts_any: ["airway_pressure", "therapy_profile", "pressure_profile", "lung"]
+    reasoning: "A lung ventilator applies pressure or flow to the patient's respiratory system. If pressure magnitude, timing, feedback, mode or fallback behavior is wrong, lung injury or insufficient ventilation may occur."
+    hazards: ["barotrauma", "volutrauma", "hypoventilation", "hyperventilation", "patient-ventilator asynchrony"]
+    missing_information: ["ventilation mode", "patient group", "maximum inspiratory pressure", "PEEP range", "tidal volume range", "pressure/flow sensor accuracy", "alarm thresholds", "safe state after fault detection"]
+
+  - id: "HT_PATIENT_GAS_PATH_PARTICULATE_TRANSPORT"
+    title: "Patient gas path may transport particles or contaminants"
+    category: "contamination_patient_airway"
+    priority_default: "medium"
+    confidence_default: "medium"
+    trigger:
+      all_of:
+        - concepts_any: ["patient_gas_path", "plastic_tube"]
+        - relation:
+            subject_any: ["patient_gas_path", "plastic_tube"]
+            relation_any: ["connected_to", "part_of", "transmitted_through"]
+            object_any: ["patient_airway", "lung", "patient_gas_path"]
+        - relation_optional:
+            subject_any: ["patient_gas_path"]
+            relation_any: ["may_transport_if_present"]
+            object_any: ["foreign_particle"]
+    reasoning: "A patient-connected breathing gas path can transport unintended particles, residues, degraded material or contaminants toward the patient airway if such material is present. This is a potential hazard pathway, not a confirmed contamination event."
+    hazards: ["foreign-body transport into patient airway", "airway obstruction", "lung irritation or inflammation", "infection risk", "reduced ventilation", "patient contamination"]
+    missing_information: ["Is the tube single-use or reusable?", "Can the plastic material shed particles?", "Is there a patient-side filter?", "How is manufacturing cleanliness controlled?", "Is the tube cleaned, disinfected or sterilized?", "Can cleaning residues remain?", "What particle size could pass through?", "What patient group is intended?"]
+
+  - id: "HT_OXYGEN_FIRE_TRIANGLE"
+    title: "Oxygen, combustible material and possible ignition source"
+    category: "fire_explosion"
+    priority_default: "high"
+    confidence_default: "medium"
+    trigger:
+      all_of:
+        - concepts_any: ["oxygen", "oxidizer"]
+        - concepts_any: ["plastic", "possible_fuel"]
+        - concepts_any: ["electrical_actuator", "possible_ignition_source"]
+        - relation:
+            subject_any: ["system"]
+            relation_any: ["has_potential_hazard_pattern"]
+            object_any: ["oxygen_fire_triangle"]
+    reasoning: "Oxygen supports combustion. Plastic may act as possible fuel depending on grade and conditions. Electrical valve modules or relays may be ignition-relevant depending on design. If these ingredients are in a relevant local context, a potential oxygen/fire concern exists and must be validated."
+    hazards: ["ignition", "rapid fire propagation", "toxic smoke", "fire in or near patient gas path"]
+    missing_information: ["oxygen concentration", "oxygen pressure", "plastic material grade and oxygen compatibility", "valve or relay type", "switching energy", "maximum local temperature", "distance, shielding and encapsulation", "normal or single-fault condition"]

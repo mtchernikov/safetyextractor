@@ -1,0 +1,136 @@
+meta:
+  version: "0.1"
+  name: "Ventilator PoC ontology"
+  purpose: "Controlled concepts for lung ventilator proof of concept."
+
+concepts:
+
+  medical_ventilator:
+    canonical_name: "lung ventilator"
+    type: "device"
+    synonyms: ["ventilator", "lung ventilator", "respirator", "mechanical ventilator", "breathing support device"]
+    properties: ["medical_therapy_device", "controls_airway_pressure_or_flow", "may_have_essential_performance"]
+    implied_facts:
+      - subject: "$self"
+        relation: "provides_function"
+        object: "ventilation"
+        relation_group: "functional"
+        confidence: 0.8
+      - subject: "$self"
+        relation: "applies_therapy_to"
+        object: "patient"
+        relation_group: "therapy"
+        confidence: 0.75
+        needs_validation: true
+
+  airway_pressure:
+    canonical_name: "airway pressure"
+    type: "controlled_parameter"
+    synonyms: ["pressure", "airway pressure", "pressure profile", "therapy pressure", "ventilation pressure", "PEEP", "PIP"]
+    properties: ["therapy_profile", "affects_lung_mechanics", "wrong_value_or_timing_can_cause_patient_harm"]
+    implied_facts:
+      - subject: "$self"
+        relation: "affects"
+        object: "lung"
+        relation_group: "physiological"
+        confidence: 0.75
+        needs_validation: true
+
+  patient:
+    canonical_name: "patient"
+    type: "person"
+    synonyms: ["patient", "human", "person", "user receiving therapy"]
+    properties: ["therapy_recipient"]
+
+  lung:
+    canonical_name: "lung"
+    type: "body_part"
+    synonyms: ["lung", "lungs", "patient lung", "human lung"]
+    properties: ["part_of_patient", "sensitive_to_pressure_volume_and_contamination"]
+    implied_facts:
+      - subject: "$self"
+        relation: "part_of"
+        object: "patient"
+        relation_group: "structural"
+        confidence: 0.9
+
+  patient_airway:
+    canonical_name: "patient airway"
+    type: "body_pathway"
+    synonyms: ["airway", "patient airway", "trachea", "respiratory tract"]
+    properties: ["connected_to_lung", "patient_contact_pathway"]
+    implied_facts:
+      - subject: "$self"
+        relation: "connected_to"
+        object: "lung"
+        relation_group: "physiological"
+        confidence: 0.8
+
+  plastic_tube:
+    canonical_name: "plastic tube"
+    type: "component"
+    synonyms: ["plastic tube", "plastic tubing", "polymer tube", "breathing tube", "ventilator tube", "tube"]
+    properties: ["material_is_plastic", "may_be_part_of_patient_gas_path", "may_generate_particles_if_degraded", "may_contain_residues_if_unclean"]
+    implied_facts:
+      - subject: "$self"
+        relation: "material"
+        object: "plastic"
+        relation_group: "material"
+        confidence: 0.9
+      - subject: "$self"
+        relation: "may_generate_if_degraded"
+        object: "foreign_particle"
+        relation_group: "potential_cause"
+        confidence: 0.45
+        needs_validation: true
+
+  plastic:
+    canonical_name: "plastic"
+    type: "material"
+    synonyms: ["plastic", "polymer", "PVC", "PE", "PP", "PC", "ABS", "silicone"]
+    properties: ["potentially_combustible", "material_grade_matters", "oxygen_compatibility_must_be_checked_if_in_oxygen_path"]
+    implied_facts:
+      - subject: "$self"
+        relation: "has_role"
+        object: "possible_fuel"
+        relation_group: "hazard_role"
+        confidence: 0.55
+        needs_validation: true
+
+  patient_gas_path:
+    canonical_name: "patient gas path"
+    type: "pathway"
+    synonyms: ["gas path", "patient gas path", "breathing gas path", "breathing circuit", "air path", "airway path"]
+    properties: ["connected_to_patient_airway", "can_transport_gas_to_patient", "may_transport_particles_if_present", "cleanliness_relevant", "biocompatibility_relevant"]
+
+  foreign_particle:
+    canonical_name: "foreign particle"
+    type: "contaminant"
+    synonyms: ["particle", "foreign particle", "particulate", "debris", "dust", "residue", "fragment", "loose particle"]
+    properties: ["may_be_transported_by_gas_or_fluid_flow", "may_obstruct_small_pathways", "may_contaminate_patient_contact_path"]
+
+  oxygen:
+    canonical_name: "oxygen"
+    type: "oxidizer"
+    synonyms: ["oxygen", "O2", "FiO2", "medical oxygen", "oxygen concentration", "oxygen flow", "oxygen line"]
+    not_synonyms: ["fuel", "flammable gas"]
+    properties: ["oxidizer", "supports_combustion", "increases_fire_severity_when_enriched"]
+    implied_facts:
+      - subject: "$self"
+        relation: "has_role"
+        object: "oxidizer"
+        relation_group: "hazard_role"
+        confidence: 0.9
+
+  electrical_actuator:
+    canonical_name: "electrical actuator"
+    type: "component"
+    synonyms: ["electronic valve module", "electrical valve", "electrically controlled valve", "solenoid valve", "relay", "valve module", "electronic valve"]
+    properties: ["may_be_EMC_sensitive", "may_be_ignition_relevant_depending_on_design", "requires_validation_before_treating_as_ignition_source"]
+    implied_facts:
+      - subject: "$self"
+        relation: "has_property"
+        object: "possible_ignition_source"
+        relation_group: "hazard_role"
+        confidence: 0.55
+        needs_validation: true

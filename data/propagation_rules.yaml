@@ -1,0 +1,17 @@
+meta:
+  version: "0.1"
+  name: "Ventilator PoC propagation rules"
+  purpose: "The demo app implements these rules by ID."
+rules:
+  - id: "PR_THERAPY_PRESSURE_LUNG_HARM"
+    title: "Ventilator pressure can harm lung if wrong"
+    description: "If a medical ventilator controls airway pressure, wrong magnitude/timing/fallback may cause lung injury."
+  - id: "PR_PATIENT_GAS_PATH_FROM_TUBE"
+    title: "Tube transmitting ventilator therapy becomes patient gas path"
+    description: "If a plastic tube transmits pressure or flow toward the patient airway/lung, derive patient gas path."
+  - id: "PR_PATIENT_GAS_PATH_TRANSPORT_SUSCEPTIBILITY"
+    title: "Patient-connected gas path can transport unintended particles"
+    description: "Particles, residues or contaminants, if present, may be transported toward the patient."
+  - id: "PR_FIRE_TRIANGLE_POTENTIAL"
+    title: "Oxygen + possible fuel + possible ignition source"
+    description: "Derive potential fire triangle if ingredients appear in local context."

@@ -1,0 +1,24 @@
+meta:
+  version: "0.1"
+  name: "Ventilator PoC relation types"
+relations:
+  is_a: {description: "Classification relation."}
+  has_property: {description: "Concept has an approved ontology property."}
+  has_role: {description: "Concept can play a role in a hazard template."}
+  part_of: {description: "Subject is part of object."}
+  connected_to: {description: "Subject is physically or functionally connected to object."}
+  near: {description: "Subject is close to object."}
+  material: {description: "Subject is made of object material."}
+  controls: {description: "Subject controls object."}
+  regulates: {description: "Subject regulates object."}
+  transmitted_through: {description: "Subject effect/medium is transmitted through object."}
+  flows_through: {description: "Subject medium flows through object."}
+  delivers_to: {description: "Subject delivers medium/effect to object."}
+  provides_function: {description: "Subject provides function."}
+  applies_therapy_to: {description: "Subject applies therapy to object."}
+  affects: {description: "Subject affects object."}
+  may_cause_if_wrong: {description: "Subject may cause object if wrong."}
+  may_transport_if_present: {description: "Subject may transport object if it is present."}
+  may_generate_if_degraded: {description: "Subject may generate object if degraded."}
+  may_reach: {description: "Subject may reach object."}
+  has_potential_hazard_pattern: {description: "System has a potential hazard pattern."}
