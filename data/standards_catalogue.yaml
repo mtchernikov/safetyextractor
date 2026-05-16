@@ -1,0 +1,227 @@
+
+meta:
+  version: "0.1"
+  name: "Standards catalogue — Ventilator + 220V PoC"
+  purpose: >
+    Deterministic catalogue for potentially applicable norms and evidence topics.
+    Norms are resolved from matched hazard IDs. The LLM must not invent standards.
+
+relation_levels:
+  primary: "Main framework or product-specific standard likely central to the assessment."
+  conditional: "Relevant if missing context confirms the scope."
+  supporting_evidence: "Useful evidence or test family, but not sufficient as main applicability basis."
+  related_but_insufficient: "Related topic but insufficient alone."
+
+entries:
+
+  ISO_14971:
+    display_name: "ISO 14971"
+    title: "Medical devices — Application of risk management to medical devices"
+    type: "standard"
+    base_confidence: "high"
+    default_relation_level: "primary"
+    addresses_hazards:
+      - hazard_id: "HT_VENT_PRESSURE_LUNG_INJURY"
+        relation_level: "primary"
+        confidence: "high"
+        rationale: "Patient harm from wrong pressure/flow profile is a medical-device risk-management topic."
+      - hazard_id: "HT_PATIENT_GAS_PATH_PARTICULATE_TRANSPORT"
+        relation_level: "primary"
+        confidence: "high"
+        rationale: "Potential patient contamination or airway obstruction is patient harm and belongs in medical-device risk management."
+      - hazard_id: "HT_OXYGEN_FIRE_TRIANGLE"
+        relation_level: "primary"
+        confidence: "medium"
+        rationale: "Oxygen/fire hazard in a patient-connected system must be addressed in risk management."
+      - hazard_id: "HT_220V_ELECTRIC_SHOCK_GENERAL"
+        relation_level: "primary"
+        confidence: "high"
+        rationale: "Electric shock and fire are hazardous situations for a medical electrical device."
+      - hazard_id: "HT_220V_ACCESSIBLE_METAL_HOUSING_SHOCK"
+        relation_level: "primary"
+        confidence: "high"
+        rationale: "Accessible conductive parts becoming live is a patient/user harm scenario."
+      - hazard_id: "HT_220V_MOISTURE_SHORT_SHOCK_FIRE"
+        relation_level: "primary"
+        confidence: "high"
+        rationale: "Moisture causing shock/fire is a risk-management scenario."
+      - hazard_id: "HT_POWER_SUPPLY_OVERHEATING_FIRE"
+        relation_level: "primary"
+        confidence: "medium"
+        rationale: "Power-supply fire and loss of power require risk-management evaluation."
+
+  IEC_60601_1:
+    display_name: "IEC 60601-1"
+    title: "Medical electrical equipment — Basic safety and essential performance"
+    type: "standard"
+    base_confidence: "high"
+    default_relation_level: "primary"
+    addresses_hazards:
+      - hazard_id: "HT_VENT_PRESSURE_LUNG_INJURY"
+        relation_level: "primary"
+        confidence: "high"
+        rationale: "Ventilator pressure/flow behavior can be essential performance of medical electrical equipment."
+      - hazard_id: "HT_OXYGEN_FIRE_TRIANGLE"
+        relation_level: "primary"
+        confidence: "medium"
+        rationale: "Medical electrical equipment with oxygen/fire context needs basic safety and essential-performance assessment."
+      - hazard_id: "HT_220V_ELECTRIC_SHOCK_GENERAL"
+        relation_level: "primary"
+        confidence: "high"
+        rationale: "220V mains in medical electrical equipment directly relates to basic safety, shock, leakage current and insulation."
+      - hazard_id: "HT_220V_ACCESSIBLE_METAL_HOUSING_SHOCK"
+        relation_level: "primary"
+        confidence: "high"
+        rationale: "Accessible conductive parts and mains require protective earth or insulation concept and touch-current assessment."
+      - hazard_id: "HT_220V_MOISTURE_SHORT_SHOCK_FIRE"
+        relation_level: "primary"
+        confidence: "high"
+        rationale: "Moisture, cleaning and mains require assessment of insulation, leakage current and basic safety."
+      - hazard_id: "HT_POWER_SUPPLY_OVERHEATING_FIRE"
+        relation_level: "primary"
+        confidence: "medium"
+        rationale: "Power-supply overheating can affect basic safety and essential performance."
+
+  ISO_80601_2_12:
+    display_name: "ISO 80601-2-12"
+    title: "Particular requirements for critical care ventilators"
+    type: "product_specific_standard"
+    base_confidence: "medium"
+    default_relation_level: "conditional"
+    addresses_hazards:
+      - hazard_id: "HT_VENT_PRESSURE_LUNG_INJURY"
+        relation_level: "primary"
+        confidence: "high"
+        rationale: "Ventilator pressure/volume/flow behavior is product-specific ventilator essential performance if critical-care ventilator scope applies."
+      - hazard_id: "HT_OXYGEN_FIRE_TRIANGLE"
+        relation_level: "conditional"
+        confidence: "medium"
+        rationale: "Oxygen/fire concerns may interact with ventilator-specific gas-path and essential-performance requirements."
+      - hazard_id: "HT_PATIENT_GAS_PATH_PARTICULATE_TRANSPORT"
+        relation_level: "conditional"
+        confidence: "medium"
+        rationale: "Patient gas-path concerns may be covered by product-specific ventilator requirements depending on scope."
+
+  IEC_62304:
+    display_name: "IEC 62304"
+    title: "Medical device software — Software life cycle processes"
+    type: "standard"
+    base_confidence: "medium"
+    default_relation_level: "conditional"
+    addresses_hazards:
+      - hazard_id: "HT_VENT_PRESSURE_LUNG_INJURY"
+        relation_level: "conditional"
+        confidence: "medium"
+        rationale: "Relevant if software controls pressure/flow profile, alarms, limits or fallback behavior."
+
+  IEC_60601_1_8:
+    display_name: "IEC 60601-1-8"
+    title: "Alarm systems in medical electrical equipment"
+    type: "collateral_standard"
+    base_confidence: "medium"
+    default_relation_level: "conditional"
+    addresses_hazards:
+      - hazard_id: "HT_VENT_PRESSURE_LUNG_INJURY"
+        relation_level: "conditional"
+        confidence: "medium"
+        rationale: "Relevant if alarms are used for pressure, flow, disconnection, oxygen or ventilation failure risk controls."
+      - hazard_id: "HT_OXYGEN_FIRE_TRIANGLE"
+        relation_level: "conditional"
+        confidence: "low"
+        rationale: "Relevant if alarms are used as risk controls for oxygen/fire or ventilation interruption scenarios."
+
+  IEC_62366_1:
+    display_name: "IEC 62366-1"
+    title: "Medical devices — Usability engineering"
+    type: "standard"
+    base_confidence: "medium"
+    default_relation_level: "conditional"
+    addresses_hazards:
+      - hazard_id: "HT_VENT_PRESSURE_LUNG_INJURY"
+        relation_level: "conditional"
+        confidence: "medium"
+        rationale: "Relevant if mode selection, pressure setting, alarm response or use error can contribute to lung injury."
+      - hazard_id: "HT_220V_ELECTRIC_SHOCK_GENERAL"
+        relation_level: "conditional"
+        confidence: "low"
+        rationale: "Relevant if user actions, cleaning or servicing can expose users to electrical hazards."
+
+  ISO_18562_SERIES:
+    display_name: "ISO 18562 series"
+    title: "Biocompatibility evaluation of breathing gas pathways in healthcare applications"
+    type: "standard_family"
+    base_confidence: "medium"
+    default_relation_level: "conditional"
+    addresses_hazards:
+      - hazard_id: "HT_PATIENT_GAS_PATH_PARTICULATE_TRANSPORT"
+        relation_level: "conditional"
+        confidence: "high"
+        rationale: "Patient breathing gas pathway contamination, particles and emissions are related to breathing gas pathway evaluation."
+
+  ISO_10993_SERIES:
+    display_name: "ISO 10993 series"
+    title: "Biological evaluation of medical devices"
+    type: "standard_family"
+    base_confidence: "medium"
+    default_relation_level: "conditional"
+    addresses_hazards:
+      - hazard_id: "HT_PATIENT_GAS_PATH_PARTICULATE_TRANSPORT"
+        relation_level: "conditional"
+        confidence: "medium"
+        rationale: "Relevant if patient-contacting materials or gas-path materials require biological evaluation."
+
+  IEC_60695_SERIES:
+    display_name: "IEC 60695 series"
+    title: "Fire hazard testing"
+    type: "test_standard_family"
+    base_confidence: "medium"
+    default_relation_level: "supporting_evidence"
+    addresses_hazards:
+      - hazard_id: "HT_OXYGEN_FIRE_TRIANGLE"
+        relation_level: "supporting_evidence"
+        confidence: "medium"
+        rationale: "Supports material/fire behavior evidence but is not the primary medical electrical product-safety framework."
+      - hazard_id: "HT_POWER_SUPPLY_OVERHEATING_FIRE"
+        relation_level: "supporting_evidence"
+        confidence: "medium"
+        rationale: "May support fire behavior evidence for materials/components around power supply faults."
+
+  UL_94:
+    display_name: "UL 94"
+    title: "Tests for flammability of plastic materials"
+    type: "test_standard"
+    base_confidence: "medium"
+    default_relation_level: "supporting_evidence"
+    addresses_hazards:
+      - hazard_id: "HT_OXYGEN_FIRE_TRIANGLE"
+        relation_level: "supporting_evidence"
+        confidence: "medium"
+        rationale: "Supports plastic flammability classification; not sufficient alone for system-level oxygen/fire safety."
+      - hazard_id: "HT_POWER_SUPPLY_OVERHEATING_FIRE"
+        relation_level: "supporting_evidence"
+        confidence: "low"
+        rationale: "May support enclosure/material flammability evidence around power supply faults."
+
+  IEC_60529:
+    display_name: "IEC 60529"
+    title: "Degrees of protection provided by enclosures — IP Code"
+    type: "standard"
+    base_confidence: "medium"
+    default_relation_level: "supporting_evidence"
+    addresses_hazards:
+      - hazard_id: "HT_220V_MOISTURE_SHORT_SHOCK_FIRE"
+        relation_level: "supporting_evidence"
+        confidence: "medium"
+        rationale: "IP rating can support evidence for protection against ingress during cleaning or use conditions."
+
+  IEC_60127_OR_FUSE_STANDARD:
+    display_name: "IEC 60127 / fuse or overcurrent protection evidence"
+    title: "Miniature fuses / overcurrent protection evidence"
+    type: "evidence_topic"
+    base_confidence: "medium"
+    default_relation_level: "supporting_evidence"
+    addresses_hazards:
+      - hazard_id: "HT_POWER_SUPPLY_OVERHEATING_FIRE"
+        relation_level: "supporting_evidence"
+        confidence: "medium"
+        rationale: "Fuse or overcurrent protection evidence can support power-supply fault/fire risk controls."
