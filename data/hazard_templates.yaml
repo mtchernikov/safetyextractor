@@ -1,7 +1,9 @@
 meta:
-  version: "0.1"
-  name: "Ventilator PoC hazard templates"
+  version: "0.2"
+  name: "Hazard templates — Ventilator + 220V"
+
 templates:
+
   - id: "HT_VENT_PRESSURE_LUNG_INJURY"
     title: "Ventilator pressure profile may injure lungs"
     category: "medical_therapy_control"
@@ -9,11 +11,32 @@ templates:
     confidence_default: "high"
     trigger:
       all_of:
-        - concepts_any: ["medical_ventilator"]
-        - concepts_any: ["airway_pressure", "therapy_profile", "pressure_profile", "lung"]
-    reasoning: "A lung ventilator applies pressure or flow to the patient's respiratory system. If pressure magnitude, timing, feedback, mode or fallback behavior is wrong, lung injury or insufficient ventilation may occur."
-    hazards: ["barotrauma", "volutrauma", "hypoventilation", "hyperventilation", "patient-ventilator asynchrony"]
-    missing_information: ["ventilation mode", "patient group", "maximum inspiratory pressure", "PEEP range", "tidal volume range", "pressure/flow sensor accuracy", "alarm thresholds", "safe state after fault detection"]
+        - concepts_any:
+            - "medical_ventilator"
+        - concepts_any:
+            - "airway_pressure"
+            - "therapy_profile"
+            - "pressure_profile"
+            - "lung"
+    reasoning: >
+      A lung ventilator applies pressure or flow to the patient's respiratory system.
+      If pressure magnitude, timing, feedback, mode or fallback behavior is wrong,
+      lung injury or insufficient ventilation may occur.
+    hazards:
+      - "barotrauma"
+      - "volutrauma"
+      - "hypoventilation"
+      - "hyperventilation"
+      - "patient-ventilator asynchrony"
+    missing_information:
+      - "ventilation mode"
+      - "patient group"
+      - "maximum inspiratory pressure"
+      - "PEEP range"
+      - "tidal volume range"
+      - "pressure/flow sensor accuracy"
+      - "alarm thresholds"
+      - "safe state after fault detection"
 
   - id: "HT_PATIENT_GAS_PATH_PARTICULATE_TRANSPORT"
     title: "Patient gas path may transport particles or contaminants"
@@ -22,18 +45,49 @@ templates:
     confidence_default: "medium"
     trigger:
       all_of:
-        - concepts_any: ["patient_gas_path", "plastic_tube"]
+        - concepts_any:
+            - "patient_gas_path"
+            - "plastic_tube"
         - relation:
-            subject_any: ["patient_gas_path", "plastic_tube"]
-            relation_any: ["connected_to", "part_of", "transmitted_through"]
-            object_any: ["patient_airway", "lung", "patient_gas_path"]
+            subject_any:
+              - "patient_gas_path"
+              - "plastic_tube"
+            relation_any:
+              - "connected_to"
+              - "part_of"
+              - "transmitted_through"
+            object_any:
+              - "patient_airway"
+              - "lung"
+              - "patient_gas_path"
         - relation_optional:
-            subject_any: ["patient_gas_path"]
-            relation_any: ["may_transport_if_present"]
-            object_any: ["foreign_particle"]
-    reasoning: "A patient-connected breathing gas path can transport unintended particles, residues, degraded material or contaminants toward the patient airway if such material is present. This is a potential hazard pathway, not a confirmed contamination event."
-    hazards: ["foreign-body transport into patient airway", "airway obstruction", "lung irritation or inflammation", "infection risk", "reduced ventilation", "patient contamination"]
-    missing_information: ["Is the tube single-use or reusable?", "Can the plastic material shed particles?", "Is there a patient-side filter?", "How is manufacturing cleanliness controlled?", "Is the tube cleaned, disinfected or sterilized?", "Can cleaning residues remain?", "What particle size could pass through?", "What patient group is intended?"]
+            subject_any:
+              - "patient_gas_path"
+            relation_any:
+              - "may_transport_if_present"
+            object_any:
+              - "foreign_particle"
+    reasoning: >
+      A patient-connected breathing gas path can transport unintended particles,
+      residues, degraded material or contaminants toward the patient airway if such
+      material is present. This is a potential hazard pathway, not a confirmed
+      contamination event.
+    hazards:
+      - "foreign-body transport into patient airway"
+      - "airway obstruction"
+      - "lung irritation or inflammation"
+      - "infection risk"
+      - "reduced ventilation"
+      - "patient contamination"
+    missing_information:
+      - "Is the tube single-use or reusable?"
+      - "Can the plastic material shed particles?"
+      - "Is there a patient-side filter?"
+      - "How is manufacturing cleanliness controlled?"
+      - "Is the tube cleaned, disinfected or sterilized?"
+      - "Can cleaning residues remain?"
+      - "What particle size could pass through?"
+      - "What patient group is intended?"
 
   - id: "HT_OXYGEN_FIRE_TRIANGLE"
     title: "Oxygen, combustible material and possible ignition source"
@@ -42,13 +96,167 @@ templates:
     confidence_default: "medium"
     trigger:
       all_of:
-        - concepts_any: ["oxygen", "oxidizer"]
-        - concepts_any: ["plastic", "possible_fuel"]
-        - concepts_any: ["electrical_actuator", "possible_ignition_source"]
+        - concepts_any:
+            - "oxygen"
+            - "oxidizer"
+        - concepts_any:
+            - "plastic"
+            - "possible_fuel"
+        - concepts_any:
+            - "electrical_actuator"
+            - "possible_ignition_source"
         - relation:
-            subject_any: ["system"]
-            relation_any: ["has_potential_hazard_pattern"]
-            object_any: ["oxygen_fire_triangle"]
-    reasoning: "Oxygen supports combustion. Plastic may act as possible fuel depending on grade and conditions. Electrical valve modules or relays may be ignition-relevant depending on design. If these ingredients are in a relevant local context, a potential oxygen/fire concern exists and must be validated."
-    hazards: ["ignition", "rapid fire propagation", "toxic smoke", "fire in or near patient gas path"]
-    missing_information: ["oxygen concentration", "oxygen pressure", "plastic material grade and oxygen compatibility", "valve or relay type", "switching energy", "maximum local temperature", "distance, shielding and encapsulation", "normal or single-fault condition"]
+            subject_any:
+              - "system"
+            relation_any:
+              - "has_potential_hazard_pattern"
+            object_any:
+              - "oxygen_fire_triangle"
+    reasoning: >
+      Oxygen supports combustion. Plastic may act as possible fuel depending on
+      grade and conditions. Electrical valve modules or relays may be ignition-
+      relevant depending on design. If these ingredients are in a relevant local
+      context, a potential oxygen/fire concern exists and must be validated.
+    hazards:
+      - "ignition"
+      - "rapid fire propagation"
+      - "toxic smoke"
+      - "fire in or near patient gas path"
+    missing_information:
+      - "oxygen concentration"
+      - "oxygen pressure"
+      - "plastic material grade and oxygen compatibility"
+      - "valve or relay type"
+      - "switching energy"
+      - "maximum local temperature"
+      - "distance, shielding and encapsulation"
+      - "normal or single-fault condition"
+
+  - id: "HT_220V_ELECTRIC_SHOCK_GENERAL"
+    title: "220V mains power supply creates electric shock concern"
+    category: "electrical_safety"
+    priority_default: "high"
+    confidence_default: "high"
+    trigger:
+      all_of:
+        - concepts_any:
+            - "power_supply_220v"
+            - "mains_input_connector"
+        - concepts_any:
+            - "hazardous_energy_source"
+            - "electric_shock"
+    reasoning: >
+      A 220V/230V mains supply is a hazardous voltage source. This does not mean
+      the design is unsafe, but it requires evidence for insulation, touch protection,
+      creepage/clearance, protective earth or double/reinforced insulation, and safe
+      service access.
+    hazards:
+      - "electric shock"
+      - "burn"
+      - "arc event"
+      - "secondary injury due to startle or fall"
+    missing_information:
+      - "Is the power supply internal or external?"
+      - "Which parts are user-accessible or service-accessible?"
+      - "Is the enclosure conductive or insulating?"
+      - "Is protective earth used?"
+      - "Is reinforced or double insulation used?"
+      - "What are creepage and clearance distances?"
+      - "What is the pollution degree and overvoltage category?"
+      - "What leakage current limits apply?"
+
+  - id: "HT_220V_ACCESSIBLE_METAL_HOUSING_SHOCK"
+    title: "220V mains with user-accessible conductive housing"
+    category: "electrical_safety"
+    priority_default: "high"
+    confidence_default: "medium"
+    trigger:
+      all_of:
+        - concepts_any:
+            - "power_supply_220v"
+            - "mains_input_connector"
+        - concepts_any:
+            - "user_accessible_metal_housing"
+        - concepts_any:
+            - "electric_shock"
+    reasoning: >
+      If a product contains hazardous mains voltage and user-accessible conductive
+      parts, the design must prevent these parts from becoming live under normal
+      or fault conditions. Protective earth, bonding, reinforced/double insulation,
+      enclosure integrity and service access must be checked.
+    hazards:
+      - "electric shock from accessible conductive part"
+      - "burn"
+      - "secondary injury"
+    missing_information:
+      - "Is the metal housing bonded to protective earth?"
+      - "Is double or reinforced insulation used?"
+      - "Can a single fault make the housing live?"
+      - "Are touch currents within limits?"
+      - "Is the enclosure user-accessible during normal use?"
+      - "Is service access possible while energized?"
+
+  - id: "HT_220V_MOISTURE_SHORT_SHOCK_FIRE"
+    title: "220V mains exposed to moisture may cause shock, short circuit or fire"
+    category: "electrical_safety"
+    priority_default: "high"
+    confidence_default: "medium"
+    trigger:
+      all_of:
+        - concepts_any:
+            - "power_supply_220v"
+            - "mains_input_connector"
+            - "power_supply_unit"
+        - concepts_any:
+            - "moisture"
+    reasoning: >
+      Moisture can reduce insulation resistance, create conductive paths and cause
+      corrosion. In a mains-powered device, this can create electric shock, short
+      circuit, fire or unintended operation concerns.
+    hazards:
+      - "electric shock"
+      - "short circuit"
+      - "fire"
+      - "corrosion"
+      - "loss of insulation"
+      - "unintended operation"
+    missing_information:
+      - "Can liquid enter the mains area?"
+      - "What is the IP rating?"
+      - "How is cleaning performed?"
+      - "Are there seals, drainage or barriers?"
+      - "What is the pollution degree?"
+      - "Are creepage and clearance valid under moisture conditions?"
+      - "Are mains components conformally coated or enclosed?"
+
+  - id: "HT_POWER_SUPPLY_OVERHEATING_FIRE"
+    title: "Power supply overheating or overload may create fire concern"
+    category: "electrical_fire"
+    priority_default: "medium"
+    confidence_default: "medium"
+    trigger:
+      all_of:
+        - concepts_any:
+            - "power_supply_unit"
+            - "power_supply_220v"
+        - concepts_any:
+            - "fire_if_fault_or_overload"
+            - "overcurrent_protection"
+            - "thermal_protection"
+    reasoning: >
+      A power supply can dissipate heat and may fail under overload or fault conditions.
+      Fire risk controls such as overcurrent protection, thermal protection, component
+      ratings and enclosure/fire containment must be checked.
+    hazards:
+      - "overheating"
+      - "fire"
+      - "smoke"
+      - "loss of power to safety-relevant function"
+    missing_information:
+      - "Power supply rating and load profile"
+      - "Fuse or overcurrent protection concept"
+      - "Thermal protection concept"
+      - "Maximum component temperature"
+      - "Enclosure material and fire containment"
+      - "Single-fault overload behavior"
+      - "Effect of loss of power on ventilation therapy"

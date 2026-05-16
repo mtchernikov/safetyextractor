@@ -1,15 +1,27 @@
 meta:
-  version: "0.1"
-  name: "Ventilator PoC ontology"
-  purpose: "Controlled concepts for lung ventilator proof of concept."
+  version: "0.2"
+  name: "Safety Co-Pilot ontology — Lung ventilator + 220V power supply"
+  purpose: >
+    Controlled concepts for the Streamlit PoC. Contains lung ventilator concepts,
+    patient gas path / particulate contamination concepts, oxygen/fire concepts,
+    and 220V mains power supply electrical-safety concepts.
 
 concepts:
 
   medical_ventilator:
     canonical_name: "lung ventilator"
     type: "device"
-    synonyms: ["ventilator", "lung ventilator", "respirator", "mechanical ventilator", "breathing support device"]
-    properties: ["medical_therapy_device", "controls_airway_pressure_or_flow", "may_have_essential_performance"]
+    synonyms:
+      - "ventilator"
+      - "lung ventilator"
+      - "respirator"
+      - "mechanical ventilator"
+      - "breathing support device"
+      - "ventilation device"
+    properties:
+      - "medical_therapy_device"
+      - "controls_airway_pressure_or_flow"
+      - "may_have_essential_performance"
     implied_facts:
       - subject: "$self"
         relation: "provides_function"
@@ -26,8 +38,18 @@ concepts:
   airway_pressure:
     canonical_name: "airway pressure"
     type: "controlled_parameter"
-    synonyms: ["pressure", "airway pressure", "pressure profile", "therapy pressure", "ventilation pressure", "PEEP", "PIP"]
-    properties: ["therapy_profile", "affects_lung_mechanics", "wrong_value_or_timing_can_cause_patient_harm"]
+    synonyms:
+      - "pressure"
+      - "airway pressure"
+      - "pressure profile"
+      - "therapy pressure"
+      - "ventilation pressure"
+      - "PEEP"
+      - "PIP"
+    properties:
+      - "therapy_profile"
+      - "affects_lung_mechanics"
+      - "wrong_value_or_timing_can_cause_patient_harm"
     implied_facts:
       - subject: "$self"
         relation: "affects"
@@ -39,14 +61,25 @@ concepts:
   patient:
     canonical_name: "patient"
     type: "person"
-    synonyms: ["patient", "human", "person", "user receiving therapy"]
-    properties: ["therapy_recipient"]
+    synonyms:
+      - "patient"
+      - "human"
+      - "person"
+      - "user receiving therapy"
+    properties:
+      - "therapy_recipient"
 
   lung:
     canonical_name: "lung"
     type: "body_part"
-    synonyms: ["lung", "lungs", "patient lung", "human lung"]
-    properties: ["part_of_patient", "sensitive_to_pressure_volume_and_contamination"]
+    synonyms:
+      - "lung"
+      - "lungs"
+      - "patient lung"
+      - "human lung"
+    properties:
+      - "part_of_patient"
+      - "sensitive_to_pressure_volume_and_contamination"
     implied_facts:
       - subject: "$self"
         relation: "part_of"
@@ -57,8 +90,14 @@ concepts:
   patient_airway:
     canonical_name: "patient airway"
     type: "body_pathway"
-    synonyms: ["airway", "patient airway", "trachea", "respiratory tract"]
-    properties: ["connected_to_lung", "patient_contact_pathway"]
+    synonyms:
+      - "airway"
+      - "patient airway"
+      - "trachea"
+      - "respiratory tract"
+    properties:
+      - "connected_to_lung"
+      - "patient_contact_pathway"
     implied_facts:
       - subject: "$self"
         relation: "connected_to"
@@ -69,8 +108,18 @@ concepts:
   plastic_tube:
     canonical_name: "plastic tube"
     type: "component"
-    synonyms: ["plastic tube", "plastic tubing", "polymer tube", "breathing tube", "ventilator tube", "tube"]
-    properties: ["material_is_plastic", "may_be_part_of_patient_gas_path", "may_generate_particles_if_degraded", "may_contain_residues_if_unclean"]
+    synonyms:
+      - "plastic tube"
+      - "plastic tubing"
+      - "polymer tube"
+      - "breathing tube"
+      - "ventilator tube"
+      - "tube"
+    properties:
+      - "material_is_plastic"
+      - "may_be_part_of_patient_gas_path"
+      - "may_generate_particles_if_degraded"
+      - "may_contain_residues_if_unclean"
     implied_facts:
       - subject: "$self"
         relation: "material"
@@ -87,8 +136,19 @@ concepts:
   plastic:
     canonical_name: "plastic"
     type: "material"
-    synonyms: ["plastic", "polymer", "PVC", "PE", "PP", "PC", "ABS", "silicone"]
-    properties: ["potentially_combustible", "material_grade_matters", "oxygen_compatibility_must_be_checked_if_in_oxygen_path"]
+    synonyms:
+      - "plastic"
+      - "polymer"
+      - "PVC"
+      - "PE"
+      - "PP"
+      - "PC"
+      - "ABS"
+      - "silicone"
+    properties:
+      - "potentially_combustible"
+      - "material_grade_matters"
+      - "oxygen_compatibility_must_be_checked_if_in_oxygen_path"
     implied_facts:
       - subject: "$self"
         relation: "has_role"
@@ -100,21 +160,55 @@ concepts:
   patient_gas_path:
     canonical_name: "patient gas path"
     type: "pathway"
-    synonyms: ["gas path", "patient gas path", "breathing gas path", "breathing circuit", "air path", "airway path"]
-    properties: ["connected_to_patient_airway", "can_transport_gas_to_patient", "may_transport_particles_if_present", "cleanliness_relevant", "biocompatibility_relevant"]
+    synonyms:
+      - "gas path"
+      - "patient gas path"
+      - "breathing gas path"
+      - "breathing circuit"
+      - "air path"
+      - "airway path"
+    properties:
+      - "connected_to_patient_airway"
+      - "can_transport_gas_to_patient"
+      - "may_transport_particles_if_present"
+      - "cleanliness_relevant"
+      - "biocompatibility_relevant"
 
   foreign_particle:
     canonical_name: "foreign particle"
     type: "contaminant"
-    synonyms: ["particle", "foreign particle", "particulate", "debris", "dust", "residue", "fragment", "loose particle"]
-    properties: ["may_be_transported_by_gas_or_fluid_flow", "may_obstruct_small_pathways", "may_contaminate_patient_contact_path"]
+    synonyms:
+      - "particle"
+      - "foreign particle"
+      - "particulate"
+      - "debris"
+      - "dust"
+      - "residue"
+      - "fragment"
+      - "loose particle"
+    properties:
+      - "may_be_transported_by_gas_or_fluid_flow"
+      - "may_obstruct_small_pathways"
+      - "may_contaminate_patient_contact_path"
 
   oxygen:
     canonical_name: "oxygen"
     type: "oxidizer"
-    synonyms: ["oxygen", "O2", "FiO2", "medical oxygen", "oxygen concentration", "oxygen flow", "oxygen line"]
-    not_synonyms: ["fuel", "flammable gas"]
-    properties: ["oxidizer", "supports_combustion", "increases_fire_severity_when_enriched"]
+    synonyms:
+      - "oxygen"
+      - "O2"
+      - "FiO2"
+      - "medical oxygen"
+      - "oxygen concentration"
+      - "oxygen flow"
+      - "oxygen line"
+    not_synonyms:
+      - "fuel"
+      - "flammable gas"
+    properties:
+      - "oxidizer"
+      - "supports_combustion"
+      - "increases_fire_severity_when_enriched"
     implied_facts:
       - subject: "$self"
         relation: "has_role"
@@ -125,8 +219,18 @@ concepts:
   electrical_actuator:
     canonical_name: "electrical actuator"
     type: "component"
-    synonyms: ["electronic valve module", "electrical valve", "electrically controlled valve", "solenoid valve", "relay", "valve module", "electronic valve"]
-    properties: ["may_be_EMC_sensitive", "may_be_ignition_relevant_depending_on_design", "requires_validation_before_treating_as_ignition_source"]
+    synonyms:
+      - "electronic valve module"
+      - "electrical valve"
+      - "electrically controlled valve"
+      - "solenoid valve"
+      - "relay"
+      - "valve module"
+      - "electronic valve"
+    properties:
+      - "may_be_EMC_sensitive"
+      - "may_be_ignition_relevant_depending_on_design"
+      - "requires_validation_before_treating_as_ignition_source"
     implied_facts:
       - subject: "$self"
         relation: "has_property"
@@ -134,3 +238,269 @@ concepts:
         relation_group: "hazard_role"
         confidence: 0.55
         needs_validation: true
+
+  power_supply_220v:
+    canonical_name: "220 V power supply"
+    type: "energy_source"
+    synonyms:
+      - "220V power supply"
+      - "220 V power supply"
+      - "220 V supply"
+      - "220V supply"
+      - "230V power supply"
+      - "230 V mains"
+      - "AC mains"
+      - "mains input"
+      - "mains voltage"
+      - "line voltage"
+      - "wall power"
+      - "grid power"
+      - "household mains"
+    not_synonyms:
+      - "low voltage DC"
+      - "battery only"
+      - "SELV"
+      - "PELV"
+    properties:
+      - "hazardous_voltage"
+      - "electric_shock_potential"
+      - "arc_potential"
+      - "fire_potential"
+      - "requires_insulation_concept"
+      - "requires_creepage_and_clearance_consideration"
+      - "requires_touch_protection"
+      - "may_require_protective_earth"
+      - "may_require_fuse_or_overcurrent_protection"
+      - "may_require_isolation_from_low_voltage_circuits"
+    implied_facts:
+      - subject: "$self"
+        relation: "has_role"
+        object: "hazardous_energy_source"
+        relation_group: "hazard_role"
+        confidence: 0.95
+      - subject: "$self"
+        relation: "may_cause"
+        object: "electric_shock"
+        relation_group: "causal_hazard"
+        confidence: 0.9
+        needs_validation: true
+      - subject: "$self"
+        relation: "may_cause"
+        object: "fire_if_fault_or_overload"
+        relation_group: "causal_hazard"
+        confidence: 0.75
+        needs_validation: true
+      - subject: "$self"
+        relation: "requires_risk_control"
+        object: "insulation_and_touch_protection"
+        relation_group: "safety_requirement"
+        confidence: 0.9
+      - subject: "$self"
+        relation: "requires_risk_control"
+        object: "creepage_and_clearance"
+        relation_group: "safety_requirement"
+        confidence: 0.85
+      - subject: "$self"
+        relation: "requires_risk_control"
+        object: "overcurrent_protection"
+        relation_group: "safety_requirement"
+        confidence: 0.8
+
+  mains_input_connector:
+    canonical_name: "mains input connector"
+    type: "component"
+    synonyms:
+      - "mains inlet"
+      - "power inlet"
+      - "IEC inlet"
+      - "AC input connector"
+      - "power connector"
+      - "plug connector"
+      - "mains connector"
+    properties:
+      - "may_be_user_accessible"
+      - "connected_to_mains_voltage"
+      - "requires_touch_protection"
+      - "requires_strain_relief_if_cable_connected"
+    implied_facts:
+      - subject: "$self"
+        relation: "connected_to"
+        object: "power_supply_220v"
+        relation_group: "electrical"
+        confidence: 0.8
+        needs_validation: true
+      - subject: "$self"
+        relation: "may_cause"
+        object: "electric_shock_if_accessible_or_damaged"
+        relation_group: "causal_hazard"
+        confidence: 0.75
+        needs_validation: true
+
+  power_supply_unit:
+    canonical_name: "power supply unit"
+    type: "component"
+    synonyms:
+      - "PSU"
+      - "AC/DC power supply"
+      - "power module"
+      - "mains power supply"
+      - "internal power supply"
+      - "external power adapter"
+      - "power supply unit"
+    properties:
+      - "converts_mains_to_low_voltage"
+      - "may_provide_isolation"
+      - "may_generate_heat"
+      - "may_fail_short_or_open"
+      - "may_create_fire_or_shock_hazard_if_faulty"
+    implied_facts:
+      - subject: "$self"
+        relation: "converts"
+        object: "mains_voltage_to_low_voltage"
+        relation_group: "functional"
+        confidence: 0.8
+      - subject: "$self"
+        relation: "may_generate"
+        object: "heat"
+        relation_group: "energy"
+        confidence: 0.7
+        needs_validation: true
+      - subject: "$self"
+        relation: "requires_risk_control"
+        object: "thermal_protection"
+        relation_group: "safety_requirement"
+        confidence: 0.7
+        needs_validation: true
+
+  protective_earth:
+    canonical_name: "protective earth"
+    type: "risk_control"
+    synonyms:
+      - "protective earth"
+      - "PE"
+      - "earth"
+      - "protective grounding"
+      - "protective conductor"
+    not_synonyms:
+      - "functional earth"
+      - "signal ground"
+    properties:
+      - "shock_risk_control"
+      - "depends_on_bonding_integrity"
+      - "requires_continuity"
+    implied_facts:
+      - subject: "$self"
+        relation: "mitigates"
+        object: "electric_shock"
+        relation_group: "risk_control"
+        confidence: 0.8
+        needs_validation: true
+
+  insulation_barrier:
+    canonical_name: "insulation barrier"
+    type: "risk_control"
+    synonyms:
+      - "basic insulation"
+      - "reinforced insulation"
+      - "double insulation"
+      - "isolation barrier"
+      - "dielectric barrier"
+      - "insulation barrier"
+    properties:
+      - "shock_risk_control"
+      - "requires_creepage_and_clearance"
+      - "may_degrade_with_heat_moisture_pollution_or_ageing"
+    implied_facts:
+      - subject: "$self"
+        relation: "mitigates"
+        object: "electric_shock"
+        relation_group: "risk_control"
+        confidence: 0.85
+
+  fuse_or_overcurrent_protection:
+    canonical_name: "overcurrent protection"
+    type: "risk_control"
+    synonyms:
+      - "fuse"
+      - "circuit breaker"
+      - "overcurrent protection"
+      - "current limiter"
+      - "thermal fuse"
+      - "PTC fuse"
+    properties:
+      - "fire_risk_control"
+      - "limits_fault_current"
+      - "must_be_rated_for_voltage_current_and_fault_condition"
+    implied_facts:
+      - subject: "$self"
+        relation: "mitigates"
+        object: "fire_if_fault_or_overload"
+        relation_group: "risk_control"
+        confidence: 0.8
+        needs_validation: true
+
+  low_voltage_output:
+    canonical_name: "low voltage output"
+    type: "electrical_interface"
+    synonyms:
+      - "DC output"
+      - "24V output"
+      - "12V output"
+      - "5V output"
+      - "low voltage rail"
+      - "secondary side"
+    properties:
+      - "may_be_user_accessible"
+      - "must_be_assessed_for_isolation_from_mains"
+      - "may_be_SELV_or_PELV_if_requirements_met"
+    implied_facts:
+      - subject: "$self"
+        relation: "requires_validation_of"
+        object: "isolation_from_mains"
+        relation_group: "safety_requirement"
+        confidence: 0.85
+        needs_validation: true
+
+  user_accessible_metal_housing:
+    canonical_name: "user-accessible metal housing"
+    type: "component"
+    synonyms:
+      - "metal housing"
+      - "metal enclosure"
+      - "conductive enclosure"
+      - "user-accessible metal housing"
+      - "touchable metal part"
+      - "accessible metal part"
+    properties:
+      - "conductive_part"
+      - "user_accessible"
+      - "may_become_live_under_fault_if_not_protected"
+    implied_facts:
+      - subject: "$self"
+        relation: "user_accessible"
+        object: "user"
+        relation_group: "human_interaction"
+        confidence: 0.85
+      - subject: "$self"
+        relation: "requires_risk_control"
+        object: "protective_earth_or_reinforced_insulation"
+        relation_group: "safety_requirement"
+        confidence: 0.85
+        needs_validation: true
+
+  moisture:
+    canonical_name: "moisture"
+    type: "environmental_condition"
+    synonyms:
+      - "water"
+      - "moisture"
+      - "condensation"
+      - "humidity"
+      - "wet cleaning"
+      - "liquid disinfectant"
+      - "cleaning liquid"
+      - "rain"
+    properties:
+      - "may_reduce_insulation_resistance"
+      - "may_create_conductive_paths"
+      - "may_cause_corrosion"

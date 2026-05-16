@@ -1,17 +1,116 @@
 meta:
-  version: "0.1"
-  name: "Ventilator PoC propagation rules"
-  purpose: "The demo app implements these rules by ID."
+  version: "0.2"
+  name: "Propagation rules — Ventilator + 220V"
+  purpose: >
+    Deterministic inference rules used after LLM normalization and ontology mapping.
+    The current demo app implements a subset directly; these IDs document the desired logic.
+
 rules:
+
   - id: "PR_THERAPY_PRESSURE_LUNG_HARM"
     title: "Ventilator pressure can harm lung if wrong"
-    description: "If a medical ventilator controls airway pressure, wrong magnitude/timing/fallback may cause lung injury."
+    description: >
+      If a medical ventilator controls an airway pressure or therapy profile,
+      then wrong magnitude, timing or fallback may cause lung injury.
+    output_fact:
+      subject: "airway_pressure"
+      relation: "may_cause_if_wrong"
+      object: "lung_injury"
+
   - id: "PR_PATIENT_GAS_PATH_FROM_TUBE"
     title: "Tube transmitting ventilator therapy becomes patient gas path"
-    description: "If a plastic tube transmits pressure or flow toward the patient airway/lung, derive patient gas path."
+    description: >
+      If a plastic tube transmits pressure or flow toward the patient airway/lung,
+      derive that the tube is part of the patient gas path.
+    output_facts:
+      - subject: "plastic_tube"
+        relation: "part_of"
+        object: "patient_gas_path"
+      - subject: "patient_gas_path"
+        relation: "connected_to"
+        object: "patient_airway"
+      - subject: "patient_airway"
+        relation: "connected_to"
+        object: "lung"
+
   - id: "PR_PATIENT_GAS_PATH_TRANSPORT_SUSCEPTIBILITY"
     title: "Patient-connected gas path can transport unintended particles"
-    description: "Particles, residues or contaminants, if present, may be transported toward the patient."
+    description: >
+      If a path is part of a patient gas path and connected to the patient airway,
+      then particles, residues or contaminants, if present, may be transported
+      toward the patient.
+    output_facts:
+      - subject: "patient_gas_path"
+        relation: "may_transport_if_present"
+        object: "foreign_particle"
+      - subject: "foreign_particle"
+        relation: "may_reach"
+        object: "lung"
+
   - id: "PR_FIRE_TRIANGLE_POTENTIAL"
     title: "Oxygen + possible fuel + possible ignition source"
-    description: "Derive potential fire triangle if ingredients appear in local context."
+    description: >
+      If oxygen, possible combustible material and possible ignition source appear
+      in local context, derive a potential fire-triangle hazard pattern.
+    output_fact:
+      subject: "system"
+      relation: "has_potential_hazard_pattern"
+      object: "oxygen_fire_triangle"
+
+  - id: "PR_220V_HAZARDOUS_ENERGY"
+    title: "220V mains is hazardous energy"
+    description: >
+      If a system contains a 220V/230V mains power supply, derive hazardous-energy,
+      shock and fire-potential facts. These should remain potential until risk controls
+      are confirmed.
+    when:
+      all:
+        - concept_present_any:
+            - "power_supply_220v"
+            - "mains_input_connector"
+    output_facts:
+      - subject: "power_supply_220v"
+        relation: "has_role"
+        object: "hazardous_energy_source"
+      - subject: "power_supply_220v"
+        relation: "may_cause"
+        object: "electric_shock"
+      - subject: "power_supply_220v"
+        relation: "may_cause"
+        object: "fire_if_fault_or_overload"
+
+  - id: "PR_MAINS_TO_ACCESSIBLE_CONDUCTIVE_PART"
+    title: "Mains plus accessible conductive part creates shock investigation"
+    description: >
+      If hazardous mains voltage and a user-accessible conductive part exist in the
+      same device, protective earth or reinforced/double insulation must be verified.
+      This is a potential concern, not a confirmed unsafe state.
+    when:
+      all:
+        - concept_present_any:
+            - "power_supply_220v"
+            - "mains_input_connector"
+        - concept_present_any:
+            - "user_accessible_metal_housing"
+    output_fact:
+      subject: "system"
+      relation: "has_potential_hazard_pattern"
+      object: "mains_accessible_part_shock_path"
+
+  - id: "PR_MAINS_MOISTURE_CONDUCTIVE_PATH"
+    title: "Mains plus moisture may create conductive fault path"
+    description: >
+      If hazardous voltage or mains components are exposed to moisture, derive a
+      potential shock/short/fire concern.
+    when:
+      all:
+        - concept_present_any:
+            - "power_supply_220v"
+            - "mains_input_connector"
+            - "power_supply_unit"
+        - concept_present_any:
+            - "moisture"
+    output_fact:
+      subject: "system"
+      relation: "has_potential_hazard_pattern"
+      object: "mains_moisture_fault_path"
