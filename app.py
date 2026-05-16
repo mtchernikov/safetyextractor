@@ -1,13 +1,15 @@
 import os
 import json
-import traceback
-from typing import Any
+import re
+from typing import Any, Dict, List, Optional, Tuple
 
+import pandas as pd
 import streamlit as st
+import yaml
 from openai import OpenAI
 
 
-def get_api_key() -> str | None:
+def get_api_key() -> Optional[str]:
     try:
         key = st.secrets.get("OPENAI_API_KEY")
         if key:
@@ -17,29 +19,33 @@ def get_api_key() -> str | None:
     return os.getenv("OPENAI_API_KEY")
 
 
-def try_parse_json(value: Any) -> Any:
-    if value is None:
-        return None
+def load_yaml_from_upload_or_default(uploaded_file, default_path: str) -> Dict[str, Any]:
+    if uploaded_file is not None:
+        return yaml.safe_load(uploaded_file.read().decode("utf-8"))
+    with open(default_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
 
-    text = str(value).strip()
+
+def as_json(obj: Any) -> str:
+    return json.dumps(obj, indent=2, ensure_ascii=False)
+
+
+def try_parse_json(text: str) -> Dict[str, Any]:
     if not text:
-        return None
-
+        return {}
+    text = text.strip()
     try:
         return json.loads(text)
     except Exception:
         pass
-
     if text.startswith("```"):
-        cleaned = text.strip("`").strip()
-        if cleaned.lower().startswith("json"):
-            cleaned = cleaned[4:].strip()
+        text = text.strip("`").strip()
+        if text.lower().startswith("json"):
+            text = text[4:].strip()
         try:
-            return json.loads(cleaned)
+            return json.loads(text)
         except Exception:
             pass
-
-    # Try object first.
     start = text.find("{")
     end = text.rfind("}")
     if start >= 0 and end > start:
@@ -47,333 +53,430 @@ def try_parse_json(value: Any) -> Any:
             return json.loads(text[start:end + 1])
         except Exception:
             pass
-
-    # Then array.
-    start = text.find("[")
-    end = text.rfind("]")
-    if start >= 0 and end > start:
-        try:
-            return json.loads(text[start:end + 1])
-        except Exception:
-            pass
-
     return {"raw_text": text}
 
 
-def pretty_json(obj: Any) -> str:
-    try:
-        if isinstance(obj, str):
-            obj = try_parse_json(obj)
-        return json.dumps(obj, indent=2, ensure_ascii=False)
-    except Exception:
-        return str(obj)
+def normalize_id(text: str) -> str:
+    text = str(text).strip().lower()
+    text = re.sub(r"[^a-z0-9_]+", "_", text)
+    text = re.sub(r"_+", "_", text).strip("_")
+    return text or "unknown"
 
 
-def run_raw_prompt(api_key: str, model: str, prompt_template: str, text: str, allowed_relations: str, ontology_hint: str) -> dict:
+def graph_has_concept(graph: List[Dict[str, Any]], concept: str) -> bool:
+    concept = normalize_id(concept)
+    for f in graph:
+        if normalize_id(f.get("subject")) == concept or normalize_id(f.get("object")) == concept:
+            return True
+    return False
+
+
+def graph_has_any_concept(graph: List[Dict[str, Any]], concepts: List[str]) -> bool:
+    return any(graph_has_concept(graph, c) for c in concepts)
+
+
+def add_fact(graph: List[Dict[str, Any]], subject: str, relation: str, object_: str, relation_group: str = "unknown", source: str = "derived", confidence: float = 0.7, evidence: str = "", line_id: Optional[int] = None, rule: Optional[str] = None, needs_validation: bool = False) -> None:
+    fact = {
+        "subject": normalize_id(subject),
+        "relation": relation,
+        "object": normalize_id(object_),
+        "relation_group": relation_group,
+        "source": source,
+        "confidence": confidence,
+        "evidence": evidence,
+        "line_id": line_id,
+        "needs_validation": needs_validation,
+    }
+    if rule:
+        fact["rule"] = rule
+    key = (fact["subject"], fact["relation"], fact["object"], fact["source"], fact.get("rule"))
+    existing = {(x.get("subject"), x.get("relation"), x.get("object"), x.get("source"), x.get("rule")) for x in graph}
+    if key not in existing:
+        graph.append(fact)
+
+
+def ontology_summary(ontology: Dict[str, Any]) -> str:
+    lines = []
+    for cid, c in ontology.get("concepts", {}).items():
+        syns = ", ".join(c.get("synonyms", [])[:8])
+        props = ", ".join(c.get("properties", [])[:8])
+        lines.append(f"- {cid}: type={c.get('type')}; synonyms=[{syns}]; properties=[{props}]")
+    return "\n".join(lines)
+
+
+def allowed_relation_summary(relations: Dict[str, Any]) -> str:
+    lines = []
+    for rid, r in relations.get("relations", {}).items():
+        lines.append(f"- {rid}: {r.get('description', '')}")
+    return "\n".join(lines)
+
+
+def llm_normalize_description(api_key: str, model: str, description: str, ontology: Dict[str, Any], relations: Dict[str, Any]) -> Dict[str, Any]:
     client = OpenAI(api_key=api_key)
-    final_prompt = prompt_template.format(
-        text=text,
-        allowed_relations=allowed_relations,
-        ontology_hint=ontology_hint,
-    )
+    prompt = f"""
+You are a safety engineering extraction and normalization module.
+
+Task:
+Normalize the system description into controlled concepts and graph triples.
+
+Rules:
+- Do NOT decide final hazards or applicable standards.
+- Use the ontology concepts where possible.
+- Use only allowed relation IDs.
+- Mark inferred facts as source="inferred".
+- Mark direct facts from the text as source="explicit".
+- Return valid JSON only.
+
+Ontology:
+{ontology_summary(ontology)}
+
+Allowed relations:
+{allowed_relation_summary(relations)}
+
+System description:
+{description}
+
+Return JSON:
+{{
+  "entities": [
+    {{
+      "id": "E1",
+      "original_text": "",
+      "canonical": "",
+      "type": "",
+      "line_id": 1,
+      "confidence": "low|medium|high"
+    }}
+  ],
+  "triples": [
+    {{
+      "subject": "",
+      "relation": "",
+      "object": "",
+      "relation_group": "",
+      "source": "explicit|inferred",
+      "line_id": 1,
+      "confidence": 0.0,
+      "evidence": ""
+    }}
+  ],
+  "unknowns": []
+}}
+"""
     response = client.chat.completions.create(
         model=model,
         temperature=0,
+        response_format={"type": "json_object"},
         messages=[
-            {"role": "system", "content": "You are a precise safety engineering extraction assistant. Return valid JSON only."},
-            {"role": "user", "content": final_prompt},
+            {"role": "system", "content": "Return valid JSON only. Be conservative and traceable."},
+            {"role": "user", "content": prompt},
         ],
     )
-    raw_output = response.choices[0].message.content or ""
-    return {
-        "prompt_used": final_prompt,
-        "raw_output": raw_output,
-        "parsed_output": try_parse_json(raw_output),
-    }
+    return try_parse_json(response.choices[0].message.content or "{}")
 
 
-def _parse_array(value: Any) -> list:
-    parsed = try_parse_json(value)
-    return parsed if isinstance(parsed, list) else []
+def fallback_normalize(description: str, ontology: Dict[str, Any]) -> Dict[str, Any]:
+    text = description.lower()
+    entities, triples = [], []
+    def ent(original, canonical, typ):
+        entities.append({"id": f"E{len(entities)+1}", "original_text": original, "canonical": canonical, "type": typ, "line_id": 1, "confidence": "medium"})
+    if "ventilator" in text or "respirator" in text:
+        ent("ventilator", "medical_ventilator", "device")
+    if "pressure" in text:
+        ent("pressure", "airway_pressure", "controlled_parameter")
+    if "lung" in text:
+        ent("lung", "lung", "body_part")
+    if "patient" in text:
+        ent("patient", "patient", "person")
+    if "plastic" in text and ("tube" in text or "tubing" in text):
+        ent("plastic tube", "plastic_tube", "component")
+    if "oxygen" in text or "o2" in text:
+        ent("oxygen", "oxygen", "oxidizer")
+    if "valve" in text or "relay" in text:
+        ent("electronic valve module", "electrical_actuator", "component")
+    concepts = {e["canonical"] for e in entities}
+    if "medical_ventilator" in concepts and "airway_pressure" in concepts:
+        triples.append({"subject": "medical_ventilator", "relation": "controls", "object": "airway_pressure", "relation_group": "control", "source": "explicit", "line_id": 1, "confidence": 0.8, "evidence": "ventilator applies pressure"})
+    if "airway_pressure" in concepts and "plastic_tube" in concepts:
+        triples.append({"subject": "airway_pressure", "relation": "transmitted_through", "object": "plastic_tube", "relation_group": "medium_flow", "source": "explicit", "line_id": 1, "confidence": 0.8, "evidence": "via a plastic tube"})
+    if "plastic_tube" in concepts:
+        triples.append({"subject": "plastic_tube", "relation": "material", "object": "plastic", "relation_group": "material", "source": "explicit", "line_id": 1, "confidence": 0.8, "evidence": "plastic tube"})
+    if "plastic_tube" in concepts and "patient" in concepts:
+        triples.append({"subject": "plastic_tube", "relation": "connected_to", "object": "patient_airway", "relation_group": "structural", "source": "inferred", "line_id": 1, "confidence": 0.65, "evidence": "tube connects ventilator therapy to patient"})
+    if "patient" in concepts and "lung" in concepts:
+        triples.append({"subject": "patient_airway", "relation": "connected_to", "object": "lung", "relation_group": "physiological", "source": "inferred", "line_id": 1, "confidence": 0.65, "evidence": "patient lung"})
+    if "oxygen" in concepts and "plastic_tube" in concepts:
+        triples.append({"subject": "oxygen", "relation": "flows_through", "object": "plastic_tube", "relation_group": "medium_flow", "source": "inferred", "line_id": 1, "confidence": 0.6, "evidence": "oxygen context and plastic tube"})
+    if "electrical_actuator" in concepts and "plastic_tube" in concepts:
+        triples.append({"subject": "electrical_actuator", "relation": "near", "object": "plastic_tube", "relation_group": "structural", "source": "inferred", "line_id": 1, "confidence": 0.5, "evidence": "electronic valve module near tube"})
+    return {"entities": entities, "triples": triples, "unknowns": ["patient group", "pressure limits", "tube material grade", "single-use or reusable tube", "patient-side filter", "oxygen concentration if oxygen is used"]}
 
 
-def _make_dspy_predictor(use_optimizer: bool):
-    import dspy
-
-    class ExtractSafetyFacts(dspy.Signature):
-        """Extract safety-relevant concepts, relations, unknowns and candidate inferences.
-        Do not decide applicable standards. Use only allowed relation IDs.
-        Return JSON strings in the output fields.
-        """
-
-        text = dspy.InputField(desc="Free-text system or product description.")
-        allowed_relations = dspy.InputField(desc="Comma-separated allowed relation IDs.")
-        ontology_hint = dspy.InputField(desc="Comma-separated ontology concepts that should be preferred.")
-
-        concepts_json = dspy.OutputField(desc='JSON array of canonical concept strings, e.g. ["oxygen", "plastic"].')
-        relations_json = dspy.OutputField(desc='JSON array of [subject, relation, object] triples using only allowed relation IDs.')
-        unknowns_json = dspy.OutputField(desc='JSON array of missing information items.')
-        candidate_inferences_json = dspy.OutputField(desc='JSON array of objects with fact, basis, needs_validation, confidence.')
-
-    predictor = dspy.Predict(ExtractSafetyFacts)
-
-    if not use_optimizer:
-        return predictor
-
-    examples = [
-        dspy.Example(
-            text="The O2 line runs close to a relay. Plastic tubing is used in the same gas path.",
-            allowed_relations="near, flows_through, located_inside, controls, contains",
-            ontology_hint="oxygen, electrical_actuator, plastic, gas_path",
-            concepts_json=json.dumps(["oxygen", "electrical_actuator", "plastic", "gas_path"]),
-            relations_json=json.dumps([
-                ["oxygen", "flows_through", "gas_path"],
-                ["relay", "near", "plastic_tubing"],
-            ]),
-            unknowns_json=json.dumps([
-                "oxygen concentration",
-                "oxygen pressure",
-                "relay ignition source relevance",
-                "plastic material grade",
-            ]),
-            candidate_inferences_json=json.dumps([
-                {
-                    "fact": "relay may be ignition-relevant near oxygen/plastic context",
-                    "basis": "relay close to O2 line and plastic tubing",
-                    "needs_validation": True,
-                    "confidence": "medium",
-                }
-            ]),
-        ).with_inputs("text", "allowed_relations", "ontology_hint"),
-        dspy.Example(
-            text="The CGM sends glucose values to the insulin pump. The pump automatically adapts basal rate.",
-            allowed_relations="sends_data_to, controls, affects, depends_on",
-            ontology_hint="CGM, insulin_pump, glucose_data, dose_profile, closed_loop",
-            concepts_json=json.dumps(["CGM", "insulin_pump", "glucose_data", "dose_profile", "closed_loop"]),
-            relations_json=json.dumps([
-                ["CGM", "sends_data_to", "insulin_pump"],
-                ["insulin_pump", "controls", "dose_profile"],
-            ]),
-            unknowns_json=json.dumps([
-                "fallback after CGM loss",
-                "independent dose limits",
-                "secure pairing",
-            ]),
-            candidate_inferences_json=json.dumps([
-                {
-                    "fact": "CGM data may influence insulin therapy",
-                    "basis": "pump automatically adapts basal rate from glucose values",
-                    "needs_validation": True,
-                    "confidence": "high",
-                }
-            ]),
-        ).with_inputs("text", "allowed_relations", "ontology_hint"),
-    ]
-
-    def extraction_metric(example, pred, trace=None):
-        score = 0.0
-        expected_concepts = set(_parse_array(example.concepts_json))
-        predicted_concepts = set(_parse_array(pred.concepts_json))
-        if expected_concepts:
-            score += 0.45 * len(expected_concepts & predicted_concepts) / len(expected_concepts)
-
-        allowed = {x.strip() for x in str(example.allowed_relations).split(",") if x.strip()}
-        predicted_relations = _parse_array(pred.relations_json)
-        predicted_relation_ids = {r[1] for r in predicted_relations if isinstance(r, list) and len(r) >= 3}
-        if predicted_relation_ids and predicted_relation_ids.issubset(allowed):
-            score += 0.25
-
-        expected_relations = {tuple(r) for r in _parse_array(example.relations_json) if isinstance(r, list)}
-        predicted_relations_set = {tuple(r) for r in predicted_relations if isinstance(r, list)}
-        if expected_relations:
-            score += 0.20 * len(expected_relations & predicted_relations_set) / len(expected_relations)
-
-        if _parse_array(pred.unknowns_json):
-            score += 0.10
-        return score
-
-    try:
-        optimizer = dspy.BootstrapFewShot(
-            metric=extraction_metric,
-            max_bootstrapped_demos=2,
-            max_labeled_demos=2,
-            max_rounds=1,
-        )
-    except AttributeError:
-        from dspy.teleprompt import BootstrapFewShot
-        optimizer = BootstrapFewShot(
-            metric=extraction_metric,
-            max_bootstrapped_demos=2,
-            max_labeled_demos=2,
-            max_rounds=1,
-        )
-
-    return optimizer.compile(predictor, trainset=examples)
+def build_graph(normalized: Dict[str, Any], ontology: Dict[str, Any]) -> List[Dict[str, Any]]:
+    graph: List[Dict[str, Any]] = []
+    concepts = ontology.get("concepts", {})
+    for ent in normalized.get("entities", []):
+        canonical = normalize_id(ent.get("canonical") or ent.get("original_text"))
+        typ = normalize_id(ent.get("type", "unknown"))
+        add_fact(graph, canonical, "is_a", typ, "classification", "llm_extraction", {"high": 0.9, "medium": 0.7, "low": 0.4}.get(ent.get("confidence"), 0.7), ent.get("original_text", ""), ent.get("line_id"))
+    for tr in normalized.get("triples", []):
+        add_fact(graph, tr.get("subject", ""), tr.get("relation", "related_to"), tr.get("object", ""), tr.get("relation_group", "unknown"), tr.get("source", "explicit"), float(tr.get("confidence", 0.7) or 0.7), tr.get("evidence", ""), tr.get("line_id"))
+    changed = True
+    while changed:
+        changed = False
+        all_nodes = {f["subject"] for f in graph} | {f["object"] for f in graph}
+        for cid, c in concepts.items():
+            cid_norm = normalize_id(cid)
+            if cid_norm not in all_nodes:
+                continue
+            before = len(graph)
+            for prop in c.get("properties", []):
+                add_fact(graph, cid_norm, "has_property", prop, "ontology_property", "ontology", 0.75, f"Ontology property of {cid}")
+            for implied in c.get("implied_facts", []):
+                add_fact(graph, implied.get("subject", cid_norm).replace("$self", cid_norm), implied.get("relation", "related_to"), implied.get("object", ""), implied.get("relation_group", "ontology_implied"), "ontology", float(implied.get("confidence", 0.7)), f"Ontology implied fact of {cid}", needs_validation=bool(implied.get("needs_validation", False)))
+            if len(graph) > before:
+                changed = True
+    return graph
 
 
-def run_dspy(api_key: str, model: str, text: str, allowed_relations: str, ontology_hint: str, use_optimizer: bool) -> dict:
-    import dspy
-
-    os.environ["OPENAI_API_KEY"] = api_key
-    lm = dspy.LM(f"openai/{model}")
-
-    # Important: do NOT call dspy.configure(...) here.
-    # Streamlit reruns and model changes can happen in different threads.
-    # dspy.context(...) is local to this block and avoids the thread error.
-    with dspy.context(lm=lm):
-        predictor = _make_dspy_predictor(use_optimizer=use_optimizer)
-        pred = predictor(
-            text=text,
-            allowed_relations=allowed_relations,
-            ontology_hint=ontology_hint,
-        )
-
-    return {
-        "concepts": try_parse_json(getattr(pred, "concepts_json", "")),
-        "relations": try_parse_json(getattr(pred, "relations_json", "")),
-        "unknowns": try_parse_json(getattr(pred, "unknowns_json", "")),
-        "candidate_inferences": try_parse_json(getattr(pred, "candidate_inferences_json", "")),
-        "raw_fields": {
-            "concepts_json": getattr(pred, "concepts_json", ""),
-            "relations_json": getattr(pred, "relations_json", ""),
-            "unknowns_json": getattr(pred, "unknowns_json", ""),
-            "candidate_inferences_json": getattr(pred, "candidate_inferences_json", ""),
-        },
-    }
+def has_fact(graph: List[Dict[str, Any]], subject: Optional[str] = None, relation: Optional[str] = None, object_: Optional[str] = None) -> bool:
+    for f in graph:
+        if subject and normalize_id(f.get("subject")) != normalize_id(subject):
+            continue
+        if relation and f.get("relation") != relation:
+            continue
+        if object_ and normalize_id(f.get("object")) != normalize_id(object_):
+            continue
+        return True
+    return False
 
 
-DEFAULT_TEXT = """The product is a lung ventilator.
-The pressure profile is software-controlled.
-Oxygen flow is regulated by an electrically controlled valve.
-Plastic components are used in the gas path."""
+def apply_propagation_rules(graph: List[Dict[str, Any]], rules: Dict[str, Any]) -> List[Dict[str, Any]]:
+    before = list(graph)
+    if graph_has_any_concept(graph, ["medical_ventilator"]) and graph_has_any_concept(graph, ["airway_pressure", "therapy_profile", "pressure_profile"]):
+        add_fact(graph, "airway_pressure", "may_cause_if_wrong", "lung_injury", "causal_hazard", "propagation_rule", 0.8, "Ventilator pressure/therapy profile affects lung mechanics.", rule="PR_THERAPY_PRESSURE_LUNG_HARM", needs_validation=True)
+    tube_to_patient = has_fact(graph, "plastic_tube", "connected_to", "patient_airway") or has_fact(graph, "plastic_tube", "connected_to", "lung") or has_fact(graph, "airway_pressure", "transmitted_through", "plastic_tube")
+    if tube_to_patient:
+        add_fact(graph, "plastic_tube", "part_of", "patient_gas_path", "structural", "propagation_rule", 0.75, "Tube transmits therapy toward patient airway/lung.", rule="PR_PATIENT_GAS_PATH_FROM_TUBE", needs_validation=True)
+        add_fact(graph, "patient_gas_path", "connected_to", "patient_airway", "structural", "propagation_rule", 0.7, "Patient gas path is connected to patient airway.", rule="PR_PATIENT_GAS_PATH_FROM_TUBE", needs_validation=True)
+        add_fact(graph, "patient_airway", "connected_to", "lung", "physiological", "propagation_rule", 0.7, "Patient airway connects to lung.", rule="PR_PATIENT_GAS_PATH_FROM_TUBE", needs_validation=True)
+    if has_fact(graph, "patient_gas_path", "connected_to", "patient_airway"):
+        add_fact(graph, "patient_gas_path", "may_transport_if_present", "foreign_particle", "potential_medium_flow", "propagation_rule", 0.65, "A patient-connected gas path can transport particles/residues if present.", rule="PR_PATIENT_GAS_PATH_TRANSPORT_SUSCEPTIBILITY", needs_validation=True)
+        add_fact(graph, "foreign_particle", "may_reach", "lung", "potential_medium_flow", "propagation_rule", 0.55, "Particle in patient gas path may reach patient airway/lung if not filtered.", rule="PR_PATIENT_GAS_PATH_TRANSPORT_SUSCEPTIBILITY", needs_validation=True)
+    oxygen_present = graph_has_any_concept(graph, ["oxygen", "oxidizer"])
+    fuel_present = graph_has_any_concept(graph, ["plastic", "combustible_material", "possible_fuel"])
+    ignition_present = graph_has_any_concept(graph, ["electrical_actuator", "possible_ignition_source", "relay", "hot_surface", "spark", "arc"])
+    locality = has_fact(graph, "electrical_actuator", "near", "plastic_tube") or has_fact(graph, "oxygen", "flows_through", "plastic_tube") or has_fact(graph, "oxygen", "flows_through", "patient_gas_path") or has_fact(graph, "plastic_tube", "part_of", "patient_gas_path")
+    if oxygen_present and fuel_present and ignition_present and locality:
+        add_fact(graph, "system", "has_potential_hazard_pattern", "oxygen_fire_triangle", "causal_hazard", "propagation_rule", 0.65, "Oxygen, possible fuel and possible ignition source appear in a related local context.", rule="PR_FIRE_TRIANGLE_POTENTIAL", needs_validation=True)
+    return [f for f in graph if f not in before]
 
-DEFAULT_RELATIONS = "near, located_inside, contains, controls, flows_through, sends_data_to, affects, part_of"
 
-DEFAULT_ONTOLOGY = "medical_ventilator, oxygen, electrical_actuator, plastic, gas_path, therapy_profile, software_control, CGM, insulin_pump, dose_profile"
+def trigger_item_matches(graph: List[Dict[str, Any]], item: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    evidence = []
+    if "concepts_any" in item:
+        for c in item["concepts_any"]:
+            if graph_has_concept(graph, c):
+                return True, [f"concept present: {c}"]
+        return False, []
+    if "relation" in item:
+        spec = item["relation"]
+        sub_any = [normalize_id(x) for x in spec.get("subject_any", [])]
+        rel_any = spec.get("relation_any", [])
+        obj_any = [normalize_id(x) for x in spec.get("object_any", [])]
+        for f in graph:
+            if (not sub_any or normalize_id(f.get("subject")) in sub_any) and (not rel_any or f.get("relation") in rel_any) and (not obj_any or normalize_id(f.get("object")) in obj_any):
+                return True, [f'{f.get("subject")} — {f.get("relation")} → {f.get("object")}']
+        return False, []
+    if "relation_optional" in item:
+        _, ev = trigger_item_matches(graph, {"relation": item["relation_optional"]})
+        return True, ev
+    return False, evidence
 
-DEFAULT_PROMPT = """Extract safety-relevant structured facts from the system description.
+
+def match_hazard_templates(graph: List[Dict[str, Any]], hazard_templates: Dict[str, Any]) -> List[Dict[str, Any]]:
+    matches = []
+    for template in hazard_templates.get("templates", []):
+        all_ok, evidence = True, []
+        for item in template.get("trigger", {}).get("all_of", []):
+            ok, ev = trigger_item_matches(graph, item)
+            if not ok:
+                all_ok = False
+                break
+            evidence.extend(ev)
+        if all_ok:
+            matches.append({
+                "hazard": template.get("title", template.get("id")),
+                "hazard_id": template.get("id"),
+                "source": "Deterministic forward",
+                "rationale": template.get("reasoning", "") + "\nEvidence: " + "; ".join(evidence),
+                "confidence": template.get("confidence_default", "medium"),
+                "missing_information": "; ".join(template.get("missing_information", [])),
+            })
+    return matches
+
+
+def llm_backward_investigation(api_key: str, model: str, description: str, graph: List[Dict[str, Any]], hazard_templates: Dict[str, Any]) -> List[Dict[str, Any]]:
+    client = OpenAI(api_key=api_key)
+    compact_templates = [{"id": t.get("id"), "title": t.get("title"), "reasoning": t.get("reasoning"), "hazards": t.get("hazards", []), "trigger": t.get("trigger", {}), "missing_information": t.get("missing_information", [])} for t in hazard_templates.get("templates", [])]
+    compact_graph = [{"subject": f.get("subject"), "relation": f.get("relation"), "object": f.get("object"), "source": f.get("source"), "confidence": f.get("confidence"), "needs_validation": f.get("needs_validation"), "evidence": f.get("evidence")} for f in graph]
+    prompt = f"""
+You are doing backward safety investigation.
+
+Task:
+For each hazard template, start from the hazard and investigate whether the design graph contains ingredients that make this hazard possible.
 
 Rules:
-- Do not decide applicable standards.
-- Do not produce final hazard conclusions.
-- Use only the allowed relation IDs.
+- Use the system graph as the main evidence.
+- Use the original description only as supporting evidence.
+- Do not invent facts.
+- Do not claim a hazard is confirmed unless the graph explicitly supports it.
+- Classify as: confirmed_context, strong_potential, potential_pathway, partial_evidence, no_evidence.
+- Be conservative.
 - Return valid JSON only.
-- Separate explicit facts from candidate inferences.
 
-Allowed relations:
-{allowed_relations}
+Original system description:
+{description}
 
-Ontology hint:
-{ontology_hint}
+System graph facts:
+{as_json(compact_graph)}
 
-System description:
-{text}
+Hazard templates:
+{as_json(compact_templates)}
 
-Return this JSON object:
+Return JSON:
 {{
-  "concepts": [],
-  "relations": [
-    ["subject", "relation", "object"]
-  ],
-  "unknowns": [],
-  "candidate_inferences": [
+  "results": [
     {{
-      "fact": "",
-      "basis": "",
-      "needs_validation": true,
-      "confidence": "low|medium|high"
+      "hazard_id": "",
+      "hazard": "",
+      "status": "confirmed_context|strong_potential|potential_pathway|partial_evidence|no_evidence",
+      "rationale": "",
+      "confidence": "low|medium|high",
+      "missing_information": []
     }}
   ]
 }}
 """
+    response = client.chat.completions.create(
+        model=model,
+        temperature=0,
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": "Return valid JSON only. Investigate hazard templates against the graph."},
+            {"role": "user", "content": prompt},
+        ],
+    )
+    parsed = try_parse_json(response.choices[0].message.content or "{}")
+    rows = []
+    for r in parsed.get("results", []):
+        if r.get("status") == "no_evidence":
+            continue
+        rows.append({
+            "hazard": r.get("hazard", r.get("hazard_id", "")),
+            "hazard_id": r.get("hazard_id", ""),
+            "source": "LLM backward",
+            "rationale": f"Status: {r.get('status')}. {r.get('rationale', '')}",
+            "confidence": r.get("confidence", "medium"),
+            "missing_information": "; ".join(r.get("missing_information", [])),
+        })
+    return rows
 
-st.set_page_config(page_title="Prompt vs DSPy Demo", layout="wide")
-st.title("Prompt vs DSPy — Safety Co-Pilot Extraction Demo")
-st.markdown("Compare a normal hand-written prompt with a DSPy signature/module for the same extraction task.")
 
-api_key = get_api_key()
-if not api_key:
-    st.error("No OPENAI_API_KEY found. Add it to Streamlit secrets or environment variables.")
-    st.stop()
+def graph_to_dot(graph: List[Dict[str, Any]]) -> str:
+    def node_id(x: str) -> str:
+        return "n_" + normalize_id(x)
+    group_colors = {"classification": "gray", "structural": "blue", "functional": "green", "control": "orange", "medium_flow": "purple", "potential_medium_flow": "purple", "material": "brown", "physiological": "red", "causal_hazard": "red", "ontology_property": "gray", "hazard_role": "red", "ontology_implied": "gray"}
+    lines = ["digraph G {", '  graph [rankdir=LR, bgcolor="transparent"];', '  node [shape=box, style="rounded,filled", fillcolor="white", color="#444444", fontname="Arial"];', '  edge [fontname="Arial", color="#555555"];']
+    nodes = sorted({f.get("subject") for f in graph} | {f.get("object") for f in graph})
+    for n in nodes:
+        if n:
+            lines.append(f'  {node_id(n)} [label="{str(n).replace("_", " ")}"];')
+    for f in graph:
+        s, o, r = f.get("subject"), f.get("object"), f.get("relation")
+        if not s or not o:
+            continue
+        color = group_colors.get(f.get("relation_group"), "black")
+        style = "dashed" if f.get("needs_validation") else "solid"
+        lines.append(f'  {node_id(s)} -> {node_id(o)} [label="{str(r).replace(chr(34), chr(39))}", color="{color}", style="{style}"];')
+    lines.append("}")
+    return "\n".join(lines)
 
-with st.sidebar:
-    st.header("Settings")
-    model = st.text_input("Model", value="gpt-4o-mini")
-    use_optimizer = st.checkbox("Use DSPy BootstrapFewShot optimizer", value=False, help="Costs extra LLM calls. For first tests, leave it off.")
-    st.caption("This version uses dspy.context(...), not dspy.configure(...), so changing model names should not trigger DSPy thread errors.")
 
-st.subheader("Input")
-text = st.text_area("System description", value=DEFAULT_TEXT, height=160)
-allowed_relations = st.text_area("Allowed relations", value=DEFAULT_RELATIONS, height=70)
-ontology_hint = st.text_area("Ontology hint", value=DEFAULT_ONTOLOGY, height=70)
-
-with st.expander("Normal prompt template"):
-    prompt_template = st.text_area("Prompt template", value=DEFAULT_PROMPT, height=360)
-
-if st.button("Run comparison", type="primary"):
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("Left: without DSPy")
-        try:
-            raw = run_raw_prompt(api_key, model, prompt_template, text, allowed_relations, ontology_hint)
-            st.markdown("**Parsed output**")
-            st.code(pretty_json(raw["parsed_output"]), language="json")
-            with st.expander("Raw model output"):
-                st.code(raw["raw_output"])
-            with st.expander("Prompt used"):
-                st.text(raw["prompt_used"])
-        except Exception as e:
-            st.error("Raw prompt call failed.")
-            st.code(str(e))
-            st.code(traceback.format_exc())
-
-    with col2:
-        st.subheader("Right: with DSPy")
-        try:
-            dspy_result = run_dspy(api_key, model, text, allowed_relations, ontology_hint, use_optimizer)
-            st.markdown("**Structured output**")
-            st.code(pretty_json({
-                "concepts": dspy_result["concepts"],
-                "relations": dspy_result["relations"],
-                "unknowns": dspy_result["unknowns"],
-                "candidate_inferences": dspy_result["candidate_inferences"],
-            }), language="json")
-            with st.expander("Raw DSPy fields"):
-                st.code(pretty_json(dspy_result["raw_fields"]), language="json")
-        except Exception as e:
-            st.error("DSPy call failed.")
-            st.code(str(e))
-            st.code(traceback.format_exc())
-
-st.divider()
+st.set_page_config(page_title="Safety Co-Pilot Ventilator PoC", layout="wide")
+st.title("Safety Co-Pilot PoC — Lung Ventilator")
 st.markdown("""
-### What to look for
-
-For the default ventilator example, a useful extraction should identify:
+This proof of concept uses uploaded YAML knowledge files, then performs:
 
 ```text
-medical_ventilator
-therapy_profile
-software_control
-oxygen
-electrical_actuator
-plastic
-gas_path
-```
-
-and relations like:
-
-```text
-software_control controls therapy_profile
-electrical_actuator controls oxygen_flow
-plastic_component located_inside gas_path
-oxygen flows_through gas_path
-```
-
-In the full Safety Co-Pilot, this extraction would then go into:
-
-```text
-ontology normalization → safety graph → propagation rules → hazard templates → combination templates → norm ranking
+system description → LLM normalization → Safety Context Graph → deterministic forward hazard matching → LLM backward hazard investigation → hazard table
 ```
 """)
+api_key = get_api_key()
+with st.sidebar:
+    st.header("Configuration")
+    model = st.text_input("OpenAI model", value="gpt-4o-mini")
+    st.caption("OPENAI_API_KEY is read from Streamlit Secrets or environment.")
+    st.header("Upload YAML artifacts")
+    ontology_upload = st.file_uploader("ontology.yaml", type=["yaml", "yml"])
+    relations_upload = st.file_uploader("relations.yaml", type=["yaml", "yml"])
+    propagation_upload = st.file_uploader("propagation_rules.yaml", type=["yaml", "yml"])
+    hazard_upload = st.file_uploader("hazard_templates.yaml", type=["yaml", "yml"])
+    use_fallback_if_no_key = st.checkbox("Use fallback extractor if no API key", value=True)
+
+ontology = load_yaml_from_upload_or_default(ontology_upload, "data/ontology.yaml")
+relations = load_yaml_from_upload_or_default(relations_upload, "data/relations.yaml")
+propagation_rules = load_yaml_from_upload_or_default(propagation_upload, "data/propagation_rules.yaml")
+hazard_templates = load_yaml_from_upload_or_default(hazard_upload, "data/hazard_templates.yaml")
+
+default_description = """The product is a lung ventilator.
+The ventilator applies pressure to the patient's lung via a plastic tube.
+The oxygen concentration can be adjusted.
+The plastic tube passes near an electronic valve module."""
+st.subheader("1. System description")
+description = st.text_area("Input or edit the system description. Press Proceed when ready.", value=default_description, height=170)
+proceed = st.button("Proceed", type="primary")
+if proceed:
+    if not api_key and not use_fallback_if_no_key:
+        st.error("No OPENAI_API_KEY found. Add it to Streamlit Secrets or enable fallback extractor.")
+        st.stop()
+    with st.spinner("Normalizing description and building graph..."):
+        if api_key:
+            normalized = llm_normalize_description(api_key, model, description, ontology, relations)
+            normalization_source = "LLM"
+        else:
+            normalized = fallback_normalize(description, ontology)
+            normalization_source = "Fallback extractor"
+        graph = build_graph(normalized, ontology)
+        derived = apply_propagation_rules(graph, propagation_rules)
+        forward_rows = match_hazard_templates(graph, hazard_templates)
+        backward_rows = llm_backward_investigation(api_key, model, description, graph, hazard_templates) if api_key else []
+        all_rows = forward_rows + backward_rows
+    st.success(f"Analysis complete. Normalization source: {normalization_source}")
+    st.subheader("2. LLM-normalized description")
+    st.json(normalized)
+    st.subheader("3. Safety Context Graph")
+    graph_tab, triples_tab, derived_tab = st.tabs(["Graph view", "Graph triples", "Derived facts"])
+    with graph_tab:
+        try:
+            st.graphviz_chart(graph_to_dot(graph), use_container_width=True)
+        except Exception as e:
+            st.warning(f"Graph rendering failed: {e}")
+            st.code(graph_to_dot(graph))
+    with triples_tab:
+        st.dataframe(pd.DataFrame(graph), use_container_width=True, hide_index=True)
+    with derived_tab:
+        if derived:
+            st.dataframe(pd.DataFrame(derived), use_container_width=True, hide_index=True)
+        else:
+            st.info("No derived facts were added.")
+    st.subheader("4. Forward deterministic + backward LLM hazard analysis")
+    if all_rows:
+        result_df = pd.DataFrame(all_rows).rename(columns={"hazard": "Hazard", "source": "LLM or Deterministic", "rationale": "Rationale why this hazard is possible", "confidence": "Confidence level", "missing_information": "Missing information"})
+        result_df = result_df[["Hazard", "LLM or Deterministic", "Rationale why this hazard is possible", "Confidence level", "Missing information"]]
+        st.dataframe(result_df, use_container_width=True, hide_index=True)
+        st.download_button("Download hazard table as CSV", data=result_df.to_csv(index=False).encode("utf-8"), file_name="safety_copilot_hazard_table.csv", mime="text/csv")
+    else:
+        st.info("No hazards or potential pathways were found.")
+else:
+    st.info("Upload YAML files if you want to override the defaults, then edit the description and press Proceed.")
